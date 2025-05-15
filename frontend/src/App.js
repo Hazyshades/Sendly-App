@@ -18,8 +18,8 @@ import { giftCard_Pink } from './svg/giftCard_Pink.js';
 import { giftCard_Blue } from './svg/giftCard_Blue.js';
 import { giftCard_Green } from './svg/giftCard_Green.js';
 
-const PINATA_API_KEY = '*';
-const PINATA_SECRET_API_KEY = '*';
+const PINATA_API_KEY = '';
+const PINATA_SECRET_API_KEY = '';
 
 const CONTRACT_ADDRESS = "0x980873Fe4b4D1426407BdAf49135a90eA84BAfb4";
 const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
