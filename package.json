@@ -1,0 +1,27 @@
+{
+  "name": "sendly-app",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@nomiclabs/hardhat-etherscan": "^3.1.8",
+    "autoprefixer": "^10.4.21",
+    "hardhat": "^2.20.0",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^4.1.6"
+  },
+  "dependencies": {
+    "@coinbase/onchainkit": "^0.38.13",
+    "@openzeppelin/contracts": "^4.7.0",
+    "dotenv": "^16.5.0",
+    "viem": "^2.29.2",
+    "wagmi": "^2.15.3"
+  }
+}
