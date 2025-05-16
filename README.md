@@ -47,11 +47,10 @@ npm start
 
 ## Author
 
-👤 **Leo**
+🦁 **Leo**
 
 * Twitter: [@Leonissx](https://twitter.com/Leonissx)
 * Github: [@Hazyshades](https://github.com/Hazyshades)
 
-## Show your support
-
-Give a ⭐️ if this project helped you!
+## Roadmap
+![ROADMAP](https://www.mermaidchart.com/raw/8933ab95-49fc-4480-a27d-941e0a813fd8?theme=light&version=v0.1&format=svg)
