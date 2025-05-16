@@ -53,4 +53,4 @@ npm start
 * Github: [@Hazyshades](https://github.com/Hazyshades)
 
 ## Roadmap
-![ROADMAP](https://www.mermaidchart.com/raw/8933ab95-49fc-4480-a27d-941e0a813fd8?theme=light&version=v0.1&format=svg)
+![ROADMAP](https://www.mermaidchart.com/raw/209b1c98-4001-440e-8552-0c6538da4399?theme=light&version=v0.1&format=svg)
