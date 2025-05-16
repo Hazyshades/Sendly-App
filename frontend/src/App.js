@@ -332,7 +332,7 @@ function App() {
       setGiftCards([...giftCards, newCard]);
       setNotification({
         show: true,
-        message: `Gift card created successfully!<br/>Token ID: <span class="break-all">${tokenId}</span>`,
+        message: `Gift card created successfully!<br/>Card ID: <span class="break-all">${tokenId}</span>`,
         type: 'success'
       });
 
@@ -642,7 +642,7 @@ function App() {
                           title="Spend this card"
                         />
                       )}
-                      <div className="font-bold text-indigo-600 text-lg mb-2">Token ID: {card.tokenId}</div>
+                      <div className="font-bold text-indigo-600 text-lg mb-2">Card ID: {card.tokenId}</div>
                       {card.message && (
                         <div className="italic text-indigo-900 text-base text-center mb-1">
                           &quot;{card.message}&quot;
@@ -679,7 +679,7 @@ function App() {
     )}
     <input
       type="number"
-      placeholder="Token ID"
+      placeholder="Card ID"
       value={tokenId}
       onChange={(e) => setTokenId(e.target.value)}
       className="w-full px-4 py-3 rounded-xl border border-indigo-200 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 mb-3"
