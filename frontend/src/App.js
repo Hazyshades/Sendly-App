@@ -7,6 +7,7 @@ import amazonImg from './assets/amazon.jpg';
 import appleImg from './assets/apple.jpg';
 import airbnbImg from './assets/airbnb.jpg';
 import sendlyLogo from './svg/sendly_logo.svg';
+import baseWordmark from './svg/Base_Wordmark_Blue.svg';
 import giftBoxLogo from './assets/download2.png';
 import { useAccount } from 'wagmi';
 import { Name, Avatar } from '@coinbase/onchainkit/identity';
@@ -18,14 +19,11 @@ import { giftCard_Pink } from './svg/giftCard_Pink.js';
 import { giftCard_Blue } from './svg/giftCard_Blue.js';
 import { giftCard_Green } from './svg/giftCard_Green.js';
 
-const PINATA_API_KEY = '';
-const PINATA_SECRET_API_KEY = '';
-
+const PINATA_API_KEY = process.env.REACT_APP_PINATA_API_KEY;
+const PINATA_SECRET_API_KEY = process.env.REACT_APP_PINATA_SECRET_API_KEY;
 const CONTRACT_ADDRESS = "0x980873Fe4b4D1426407BdAf49135a90eA84BAfb4";
 const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 const USDT_ADDRESS = "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2";
-
-
 
 // --- SVG and metadata on Pinata ---
 async function uploadSVGAndMetadataToPinata({ amount, serviceName, generator }, setNotification) {
@@ -108,7 +106,6 @@ function App() {
       setSelectedService(serviceName); // choose service
     }
   };
-
 
   const [spinning, setSpinning] = useState(true);
 
@@ -239,7 +236,6 @@ function App() {
           .send({ from: account });
         setNotification({ show: true, message: "Approve success!", type: 'success' });
       }
-
       // 2. Upload SVG and metadata to Pinata
       const metadataURI = await uploadSVGAndMetadataToPinata(
         { amount, serviceName: selectedService?.name || "Gift Card", generator: selectedDesign.generator },
@@ -413,7 +409,10 @@ function App() {
     }
   }, [notification, selectedService]);
 
+
+
   return (
+    
     <div className="min-h-screen w-full bg-radial-gradient font-sans">
       {notification.show && (
         <div className="fixed top-6 right-6 z-50">
@@ -451,7 +450,7 @@ function App() {
         className={`block ${spinning ? 'flip-vertical' : ''}`}
         style={{ maxWidth: 210, maxHeight: 210 }}
       />
-        <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2">
+        <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
           <img
             src={sendlyLogo}
             alt="Sendly Logo"
@@ -460,6 +459,11 @@ function App() {
             className="block rounded-lg border-none"
             style={{ maxWidth: 1200, maxHeight: 1200 }}
           />
+
+          <img
+            src={baseWordmark}
+            />
+            
         </div>
         <div style={{ width: 80, height: 80 }} />
         {!isConnected && (
