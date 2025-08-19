@@ -1,9 +1,0 @@
-{
-    "name": "Sendly Gift Card",
-    "description": "A gift card worth 10 USDC with a personal message.",
-    "image": "ipfs://test",
-    "attributes": [
-      { "trait_type": "Amount", "value": "10 USDC" },
-      { "trait_type": "Message", "value": "Happy Birthday!" }
-    ]
-  }

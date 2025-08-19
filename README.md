@@ -1,56 +1,109 @@
-<h1 align="center">Welcome to Sendly</h1>
-<p>
-  <img alt="Version" src="https://img.shields.io/badge/version- 0.1.0-blue.svg?cacheSeconds=2592000" />
-  <a href="https://twitter.com/Leonissx" target="_blank">
-    <img alt="Twitter: Leonissx" src="https://img.shields.io/twitter/follow/Leonissx.svg?style=social" />
-  </a>
-</p>
+# Sendly NFT Gift Card dApp
 
-> A dApp for creating and sending NFT gift cards tied to USDC/USDT on the Base network. Users can customize cards with stablecoin amounts and messages, redeemable via smart wallets without KYC.
- 
-## Prerequisites
+Децентрализованное приложение для создания и управления NFT подарочными картами на сети Base.
 
-- **Node.js** (20.x.x)  
-- **TS** (5.0.4)  
-- **coinbase/onchainkit**(0.38.13)
-- **web3** (4.16.0) 
-- **CRA** (5.0.1) 
-- **Tailwind CSS** (3.3.0) 
-- **nft.storage** 
+## 🚀 Быстрый старт
 
+### Предварительные требования
 
-### [Demo](https://sendly-app.vercel.app/)
+- Node.js 18+ 
+- npm или yarn
+- Браузер с поддержкой Web3 (MetaMask, WalletConnect и т.д.)
 
-## Install
+### Установка
 
-```sh
-npm install --legacy-peer-deps
-```
-## Integrating Basenames and Smart Wallet
-
-```
-@coinbase/onchainkit/identity
-wagmi
-```
-## A template for future Paymaster work
-
-```
-'./PaymasterProvider.js'
+1. Клонируйте репозиторий:
+```bash
+git clone <repository-url>
+cd sendly-nft-gift-card-dapp
 ```
 
-## Usage
-
-```sh
-npm start
+2. Установите зависимости:
+```bash
+npm install
 ```
-### [Contract](https://basescan.org/address/0x980873Fe4b4D1426407BdAf49135a90eA84BAfb4)
 
-## Author
+3. Запустите сервер разработки:
+```bash
+npm run dev
+```
 
-🦁 **Leo**
+4. Откройте браузер и перейдите по адресу: `http://localhost:5173`
 
-* Twitter: [@Leonissx](https://twitter.com/Leonissx)
-* Github: [@Hazyshades](https://github.com/Hazyshades)
+## 🔧 Конфигурация
 
-## Roadmap
-![ROADMAP](https://www.mermaidchart.com/raw/209b1c98-4001-440e-8552-0c6538da4399?theme=light&version=v0.1&format=svg)
+### Для продакшена (опционально)
+
+Для полной функциональности с WalletConnect, создайте файл `.env` в корне проекта:
+
+```env
+# WalletConnect Cloud Project ID
+# Получите бесплатный projectId на https://cloud.walletconnect.com/
+VITE_WALLET_CONNECT_PROJECT_ID=your_project_id_here
+
+# Supabase Configuration
+VITE_SUPABASE_URL=your_supabase_url_here
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+```
+
+### Настройка WalletConnect
+
+1. Перейдите на [WalletConnect Cloud](https://cloud.walletconnect.com/)
+2. Создайте новый проект
+3. Скопируйте Project ID
+4. Добавьте его в переменную окружения `VITE_WALLET_CONNECT_PROJECT_ID`
+
+## 🛠️ Технологии
+
+- **Frontend**: React 18, TypeScript, Vite
+- **UI**: Tailwind CSS, Radix UI, Lucide React
+- **Web3**: Wagmi, Viem
+- **Блокчейн**: Base Network (Ethereum L2)
+- **База данных**: Supabase (опционально)
+
+## 📁 Структура проекта
+
+```
+├── components/          # React компоненты
+│   ├── ui/             # UI компоненты (Radix UI)
+│   ├── CreateGiftCard.tsx
+│   ├── MyCards.tsx
+│   ├── SpendCard.tsx
+│   └── WalletConnect.tsx
+├── contracts/          # Смарт-контракты
+├── utils/             # Утилиты
+│   ├── web3/          # Web3 конфигурация
+│   └── supabase/      # Supabase клиент
+├── styles/            # CSS стили
+└── src/               # Исходный код
+```
+
+## 🔗 Поддерживаемые кошельки
+
+- MetaMask
+- Injected wallets (Brave, Opera и др.)
+- WalletConnect (при настройке projectId)
+
+## 🌐 Сеть
+
+Приложение работает на сети **Base** (Ethereum L2 от Coinbase).
+
+## 📝 Лицензия
+
+MIT License
+
+## 🤝 Вклад в проект
+
+1. Форкните репозиторий
+2. Создайте ветку для новой функции
+3. Внесите изменения
+4. Создайте Pull Request
+
+## 🆘 Поддержка
+
+Если у вас возникли проблемы:
+
+1. Проверьте, что у вас установлена последняя версия Node.js
+2. Убедитесь, что все зависимости установлены
+3. Проверьте консоль браузера на наличие ошибок
+4. Создайте Issue в репозитории 
