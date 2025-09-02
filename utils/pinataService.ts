@@ -15,8 +15,8 @@ export class PinataService {
 
   constructor() {
     // Use environment variables if available, otherwise use hardcoded keys
-    this.apiKey = import.meta.env.VITE_PINATA_API_KEY || '*';
-    this.secretKey = import.meta.env.VITE_PINATA_SECRET_API_KEY || '*';
+    this.apiKey = (import.meta as any).env?.VITE_PINATA_API_KEY || '';
+    this.secretKey = (import.meta as any).env?.VITE_PINATA_SECRET_API_KEY || '';
   }
 
   async uploadImage(imageBlob: Blob): Promise<string> {
@@ -35,6 +35,7 @@ export class PinataService {
 
       if (!response.ok) {
         const errorText = await response.text();
+        // Log error for debugging
         console.error('Pinata upload error:', errorText);
         throw new Error(`Failed to upload image to Pinata: ${response.status} ${response.statusText}`);
       }
@@ -88,12 +89,8 @@ export class PinataService {
     imageBlob: Blob
   ): Promise<string> {
     try {
-
-      
       // 1. Upload image to IPFS
-
       const imageUri = await this.uploadImage(imageBlob);
-
 
       // 2. Create metadata
       const metadata: PinataMetadata = {
@@ -121,9 +118,7 @@ export class PinataService {
       };
 
       // 3. Upload metadata to IPFS
-
       const metadataUri = await this.uploadMetadata(metadata);
-
 
       return metadataUri;
     } catch (error) {

@@ -1,7 +1,7 @@
 {
   "name": "sendly-nft-gift-card-dapp",
   "version": "1.0.0",
-  "description": "Sendly NFT Gift Card dApp",
+  "description": "Sendly NFT Gift Card",
   "private": true,
   "type": "module",
   "scripts": {

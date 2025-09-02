@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Calendar, TrendingUp, Gift, ArrowUpRight, ArrowDownLeft, Filter, Download } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Calendar, TrendingUp, Gift, ArrowUpRight, ArrowDownLeft, Filter, Download, RefreshCw } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
@@ -52,20 +52,81 @@ export function TransactionHistory() {
   });
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Добавляем refs для предотвращения повторных запросов
+  const isFetchingRef = useRef(false);
+  const lastAddressRef = useRef<string | null>(null);
+  const lastConnectionStateRef = useRef<boolean | null>(null);
+  
+  // Добавляем кэш для данных
+  const dataCacheRef = useRef<{
+    address: string | null;
+    analytics: Analytics | null;
+    transactions: Transaction[] | null;
+    timestamp: number;
+  }>({
+    address: null,
+    analytics: null,
+    transactions: null,
+    timestamp: 0
+  });
 
   useEffect(() => {
+    // Проверяем, изменились ли действительно важные параметры
+    const addressChanged = lastAddressRef.current !== address;
+    const connectionChanged = lastConnectionStateRef.current !== isConnected;
+    
+    // Обновляем refs
+    lastAddressRef.current = address || null;
+    lastConnectionStateRef.current = isConnected;
+    
+    // Если уже загружаем данные, не делаем повторный запрос
+    if (isFetchingRef.current) {
+      return;
+    }
+    
+    // Если параметры не изменились, не делаем запрос
+    if (!addressChanged && !connectionChanged) {
+      return;
+    }
+    
     if (isConnected && address) {
       fetchData();
     } else {
       setLoading(false);
+      // Сбрасываем данные если кошелек не подключен
+      setAnalytics({
+        totalSent: '0',
+        totalReceived: '0',
+        totalRedeemed: '0',
+        cardsSent: 0,
+        cardsReceived: 0,
+        averageAmount: '0',
+        topCurrency: 'USDC'
+      });
+      setTransactions([]);
     }
   }, [isConnected, address]);
 
   const fetchData = async () => {
-    if (!isConnected || !address) return;
+    if (!isConnected || !address || isFetchingRef.current) return;
+
+    // Проверяем кэш (кэш действителен 60 секунд)
+    const cacheAge = Date.now() - dataCacheRef.current.timestamp;
+    const cacheValid = cacheAge < 60000 && dataCacheRef.current.address === address;
+    
+    if (cacheValid && dataCacheRef.current.analytics && dataCacheRef.current.transactions) {
+      console.log('Using cached data');
+      setAnalytics(dataCacheRef.current.analytics);
+      setTransactions(dataCacheRef.current.transactions);
+      setLoading(false);
+      return;
+    }
 
     try {
+      isFetchingRef.current = true;
       setLoading(true);
+      console.log('Fetching transaction history for:', address);
       
       // Initialize web3 service
       const walletClient = createWalletClient({
@@ -75,48 +136,68 @@ export function TransactionHistory() {
 
       await web3Service.initialize(walletClient, address);
       
-      // Load gift cards from blockchain
-      const blockchainCards = await web3Service.loadGiftCards();
+      // Load received gift cards first (usually faster)
+      console.log('Loading received gift cards...');
+      const receivedCards = await web3Service.loadGiftCards();
+      
+      // Load sent gift cards (can be slower due to logs)
+      console.log('Loading sent gift cards...');
+      const sentCards = await web3Service.loadSentGiftCards();
+      
+      // Combine all cards
+      const allCards = [...receivedCards, ...sentCards];
       
       // Calculate analytics from blockchain data
+      let totalSent = 0;
       let totalReceived = 0;
       let totalRedeemed = 0;
+      let cardsSent = 0;
       let cardsReceived = 0;
       let cardsRedeemed = 0;
       const currencyCounts = { USDC: 0, USDT: 0 };
 
-      blockchainCards.forEach(card => {
+      allCards.forEach(card => {
         const amount = parseFloat(card.amount);
-        totalReceived += amount;
-        cardsReceived++;
         currencyCounts[card.token]++;
 
-        if (card.redeemed) {
-          totalRedeemed += amount;
-          cardsRedeemed++;
+        if (card.type === 'sent') {
+          totalSent += amount;
+          cardsSent++;
+        } else {
+          totalReceived += amount;
+          cardsReceived++;
+          
+          if (card.redeemed) {
+            totalRedeemed += amount;
+            cardsRedeemed++;
+          }
         }
       });
 
-      const averageAmount = cardsReceived > 0 ? (totalReceived / cardsReceived).toFixed(2) : '0';
-      const topCurrency = currencyCounts.USDC >= currencyCounts.USDT ? 'USDC' : 'USDT';
+      const averageAmount = (cardsSent + cardsReceived) > 0 ? 
+        ((totalSent + totalReceived) / (cardsSent + cardsReceived)).toFixed(2) : '0';
+      const topCurrency: 'USDC' | 'USDT' = currencyCounts.USDC >= currencyCounts.USDT ? 'USDC' : 'USDT';
 
-      setAnalytics({
-        totalSent: '0', // Would need to track sent cards separately
+      const newAnalytics: Analytics = {
+        totalSent: totalSent.toFixed(2),
         totalReceived: totalReceived.toFixed(2),
         totalRedeemed: totalRedeemed.toFixed(2),
-        cardsSent: 0, // Would need to track sent cards separately
+        cardsSent,
         cardsReceived,
         averageAmount,
         topCurrency
-      });
+      };
+
+      console.log('Setting analytics:', newAnalytics);
+      setAnalytics(newAnalytics);
 
       // Create transactions from blockchain data
-      const blockchainTransactions: Transaction[] = blockchainCards.map((card, index) => ({
-        id: `tx_${card.tokenId}`,
-        type: card.redeemed ? 'redeemed' : 'received',
+      const blockchainTransactions: Transaction[] = allCards.map((card, index) => ({
+        id: `tx_${card.tokenId}_${card.type}`,
+        type: card.type === 'sent' ? 'sent' : (card.redeemed ? 'redeemed' : 'received'),
         amount: card.amount,
         currency: card.token,
-        counterpart: 'Unknown', // Would need to extract from blockchain events
+        counterpart: card.type === 'sent' ? card.recipient : card.sender,
         message: card.message,
         status: 'completed',
         timestamp: new Date(Date.now() - index * 86400000).toISOString(), // Mock timestamps
@@ -124,12 +205,52 @@ export function TransactionHistory() {
         gasUsed: '0.002'
       }));
 
+      console.log('Setting transactions:', blockchainTransactions);
       setTransactions(blockchainTransactions);
+      
+      // Сохраняем данные в кэш
+      dataCacheRef.current = {
+        address: address || null,
+        analytics: newAnalytics,
+        transactions: blockchainTransactions,
+        timestamp: Date.now()
+      };
     } catch (error) {
       console.error('Error fetching data:', error);
-      toast.error('Failed to load data');
+      
+      // Проверяем различные типы ошибок
+      if (error instanceof Error) {
+        if (error.message.includes('429')) {
+          toast.error('Слишком много запросов. Попробуйте позже.');
+        } else if (error.message.includes('Invalid parameters') || error.message.includes('eth_getLogs')) {
+          toast.error('Ошибка загрузки истории. Попробуйте обновить страницу.');
+        } else if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+          toast.error('Превышено время ожидания. Проверьте соединение.');
+        } else {
+          toast.error('Ошибка загрузки данных. Попробуйте позже.');
+        }
+      } else {
+        toast.error('Неизвестная ошибка при загрузке данных.');
+      }
+      
+      // При ошибке НЕ сбрасываем данные, если они уже были загружены
+      // Это предотвратит исчезновение данных при сетевых ошибках
+      if (transactions.length === 0) {
+        setAnalytics({
+          totalSent: '0',
+          totalReceived: '0',
+          totalRedeemed: '0',
+          cardsSent: 0,
+          cardsReceived: 0,
+          averageAmount: '0',
+          topCurrency: 'USDC'
+        });
+        setTransactions([]);
+      }
     } finally {
+      console.log('Loading finished, setting loading to false');
       setLoading(false);
+      isFetchingRef.current = false;
     }
   };
 
@@ -229,10 +350,14 @@ export function TransactionHistory() {
   if (loading) {
     return (
       <div className="p-6">
-        <div className="animate-pulse space-y-4">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
-          ))}
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="text-gray-600">Загрузка истории транзакций...</p>
+          <div className="animate-pulse space-y-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -242,10 +367,29 @@ export function TransactionHistory() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold">Transaction history</h2>
-        <Button onClick={handleExport} variant="outline">
-          <Download className="w-4 h-4 mr-2" />
-          Export CSV
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            onClick={() => {
+              // Очищаем кэш и перезагружаем данные
+              dataCacheRef.current = {
+                address: null,
+                analytics: null,
+                transactions: null,
+                timestamp: 0
+              };
+              fetchData();
+            }} 
+            variant="outline"
+            disabled={loading}
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Обновить
+          </Button>
+          <Button onClick={handleExport} variant="outline">
+            <Download className="w-4 h-4 mr-2" />
+            Export CSV
+          </Button>
+        </div>
       </div>
 
       {/* Analytics Cards */}

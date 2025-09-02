@@ -3,8 +3,14 @@ export const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || "0x9808
 export const USDC_ADDRESS = import.meta.env.VITE_USDC_ADDRESS || "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 export const USDT_ADDRESS = import.meta.env.VITE_USDT_ADDRESS || "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2";
 
-// Base Network RPC URL
-export const BASE_RPC_URL = "https://mainnet.base.org";
+// Base Network RPC URLs with fallback
+export const BASE_RPC_URLS = [
+  "https://base-rpc.publicnode.com",
+  "https://1rpc.io/base",
+  "https://base-mainnet.public.blastapi.io"
+];
+
+export const BASE_RPC_URL = BASE_RPC_URLS[0]; // Primary RPC for backward compatibility
 
 // GiftCard ABI
 export const GiftCardABI = [

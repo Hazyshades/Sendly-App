@@ -228,6 +228,7 @@ export function CreateGiftCard() {
               placeholder="0x..."
               value={formData.recipientAddress}
               onChange={(e) => updateFormData('recipientAddress', e.target.value)}
+              className="mt-2"
             />
           </div>
 
@@ -239,6 +240,7 @@ export function CreateGiftCard() {
               placeholder="10"
               value={formData.amount}
               onChange={(e) => updateFormData('amount', e.target.value)}
+              className="mt-2"
             />
           </div>
 
@@ -268,7 +270,7 @@ export function CreateGiftCard() {
             <div className="flex-1">
               <Label>Currency</Label>
               <Select value={formData.currency} onValueChange={(value: 'USDC' | 'USDT') => updateFormData('currency', value)}>
-                <SelectTrigger>
+                <SelectTrigger className="mt-2">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -286,6 +288,7 @@ export function CreateGiftCard() {
               placeholder="Happy Birthday!"
               value={formData.message}
               onChange={(e) => updateFormData('message', e.target.value)}
+              className="mt-2"
             />
           </div>
 
