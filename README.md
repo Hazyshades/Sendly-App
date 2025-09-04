@@ -1,44 +1,44 @@
 # Sendly NFT Gift Card dApp
 
-Децентрализованное приложение для создания и управления NFT подарочными картами на сети Base.
+A decentralized application for creating and managing NFT gift cards on the Base network.
 
-## 🚀 Быстрый старт
+## 🚀 Quick Start
 
-### Предварительные требования
+### Prerequisites
 
 - Node.js 18+ 
-- npm или yarn
-- Браузер с поддержкой Web3 (MetaMask, WalletConnect и т.д.)
+- npm or yarn
+- Web3-enabled browser (MetaMask, WalletConnect, etc.)
 
-### Установка
+### Installation
 
-1. Клонируйте репозиторий:
+1. Clone the repository:
 ```bash
 git clone <repository-url>
 cd sendly-nft-gift-card-dapp
 ```
 
-2. Установите зависимости:
+2. Install dependencies:
 ```bash
 npm install
 ```
 
-3. Запустите сервер разработки:
+3. Start the development server:
 ```bash
 npm run dev
 ```
 
-4. Откройте браузер и перейдите по адресу: `http://localhost:5173`
+4. Open your browser and navigate to: `http://localhost:5173`
 
-## 🔧 Конфигурация
+## 🔧 Configuration
 
-### Для продакшена (опционально)
+### For Production (Optional)
 
-Для полной функциональности с WalletConnect, создайте файл `.env` в корне проекта:
+For full functionality with WalletConnect, create a `.env` file in the project root:
 
 ```env
 # WalletConnect Cloud Project ID
-# Получите бесплатный projectId на https://cloud.walletconnect.com/
+# Get a free projectId at https://cloud.walletconnect.com/
 VITE_WALLET_CONNECT_PROJECT_ID=your_project_id_here
 
 # Supabase Configuration
@@ -46,64 +46,50 @@ VITE_SUPABASE_URL=your_supabase_url_here
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 ```
 
-### Настройка WalletConnect
+### WalletConnect Setup
 
-1. Перейдите на [WalletConnect Cloud](https://cloud.walletconnect.com/)
-2. Создайте новый проект
-3. Скопируйте Project ID
-4. Добавьте его в переменную окружения `VITE_WALLET_CONNECT_PROJECT_ID`
+1. Go to [WalletConnect Cloud](https://cloud.walletconnect.com/)
+2. Create a new project
+3. Copy the Project ID
+4. Add it to the environment variable `VITE_WALLET_CONNECT_PROJECT_ID`
 
-## 🛠️ Технологии
+## 🛠️ Technologies
 
 - **Frontend**: React 18, TypeScript, Vite
 - **UI**: Tailwind CSS, Radix UI, Lucide React
 - **Web3**: Wagmi, Viem
-- **Блокчейн**: Base Network (Ethereum L2)
-- **База данных**: Supabase (опционально)
+- **Blockchain**: Base Network (Ethereum L2)
+- **Database**: Supabase (optional)
 
-## 📁 Структура проекта
+## 📁 Project Structure
 
 ```
-├── components/          # React компоненты
-│   ├── ui/             # UI компоненты (Radix UI)
+├── components/          # React components
+│   ├── ui/             # UI components (Radix UI)
 │   ├── CreateGiftCard.tsx
 │   ├── MyCards.tsx
 │   ├── SpendCard.tsx
 │   └── WalletConnect.tsx
-├── contracts/          # Смарт-контракты
-├── utils/             # Утилиты
-│   ├── web3/          # Web3 конфигурация
-│   └── supabase/      # Supabase клиент
-├── styles/            # CSS стили
-└── src/               # Исходный код
+├── contracts/          # Smart contracts
+├── utils/             # Utilities
+│   ├── web3/          # Web3 configuration
+│   └── supabase/      # Supabase client
+├── styles/            # CSS styles
+└── src/               # Source code
 ```
 
-## 🔗 Поддерживаемые кошельки
+## 🔗 Supported Wallets
 
 - MetaMask
-- Injected wallets (Brave, Opera и др.)
-- WalletConnect (при настройке projectId)
+- Injected wallets (Brave, Opera, etc.)
+- WalletConnect (when projectId is configured)
 
-## 🌐 Сеть
+## 🌐 Network
 
-Приложение работает на сети **Base** (Ethereum L2 от Coinbase).
+The application runs on the **Base** network.
 
-## 📝 Лицензия
+## 📝 License
 
 MIT License
 
-## 🤝 Вклад в проект
 
-1. Форкните репозиторий
-2. Создайте ветку для новой функции
-3. Внесите изменения
-4. Создайте Pull Request
-
-## 🆘 Поддержка
-
-Если у вас возникли проблемы:
-
-1. Проверьте, что у вас установлена последняя версия Node.js
-2. Убедитесь, что все зависимости установлены
-3. Проверьте консоль браузера на наличие ошибок
-4. Создайте Issue в репозитории 
