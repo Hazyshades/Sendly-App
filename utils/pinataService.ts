@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 // Pinata IPFS Service
 export interface PinataMetadata {
   name: string;
@@ -14,13 +16,23 @@ export class PinataService {
   private secretKey: string;
 
   constructor() {
-    // Use environment variables if available, otherwise use hardcoded keys
-    this.apiKey = (import.meta as any).env?.VITE_PINATA_API_KEY || '';
-    this.secretKey = (import.meta as any).env?.VITE_PINATA_SECRET_API_KEY || '';
+    // Load environment variables from Vite
+    this.apiKey = import.meta.env.VITE_PINATA_API_KEY || '';
+    this.secretKey = import.meta.env.VITE_PINATA_SECRET_API_KEY || '';
   }
 
   async uploadImage(imageBlob: Blob): Promise<string> {
     try {
+      // Validate API keys before making request
+      if (!this.apiKey || !this.secretKey) {
+        throw new Error('Pinata API keys are not configured. Please check your .env file.');
+      }
+      
+      if (typeof this.apiKey !== 'string' || typeof this.secretKey !== 'string') {
+        throw new Error('Pinata API keys must be strings. Current types: ' + 
+          typeof this.apiKey + ', ' + typeof this.secretKey);
+      }
+      
       const formData = new FormData();
       formData.append('file', imageBlob);
 

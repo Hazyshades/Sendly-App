@@ -8,7 +8,7 @@ import { MyCards } from './components/MyCards';
 import { SpendCard } from './components/SpendCard';
 import { TransactionHistory } from './components/TransactionHistory';
 import { AuthModal } from './components/AuthModal';
-import { WalletConnect } from './components/WalletConnect';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { Toaster } from './components/ui/sonner';
 import { useAccount } from 'wagmi';
 import { toast } from 'sonner';
@@ -36,10 +36,10 @@ export default function App() {
       {/* Header */}
       <header className="flex items-center justify-between p-6">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-cyan-400 rounded-lg flex items-center justify-center">
-            <Gift className="w-5 h-5 text-white" />
+          <div className="w-12 h-12 bg-cyan-400 rounded-lg flex items-center justify-center">
+            <Gift className="w-7 h-7 text-white" />
           </div>
-          <span className="text-white text-xl font-semibold">Sendly</span>
+          <span className="text-white text-2xl font-semibold">Sendly</span>
         </div>
         
         <div className="flex items-center gap-4">
@@ -48,7 +48,7 @@ export default function App() {
             alt="Base Logo" 
             className="h-4 w-auto"
           />
-          <WalletConnect />
+          <ConnectButton />
           <div className="relative">
             <Button 
               variant="outline" 
@@ -94,7 +94,7 @@ export default function App() {
                     </p>
                     <div className="flex gap-4 justify-center">
                       <div className="[&_button]:bg-white/20 [&_button]:backdrop-blur-sm [&_button]:border [&_button]:border-white/30 [&_button]:hover:bg-white/30 [&_button]:text-gray-800 [&_button]:hover:text-gray-900">
-                        <WalletConnect />
+                        <ConnectButton />
                       </div>
                       <div className="flex flex-col items-center">
                         <Button 

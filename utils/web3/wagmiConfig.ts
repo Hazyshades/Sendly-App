@@ -1,17 +1,15 @@
-import { createConfig, http } from 'wagmi';
+import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { base } from 'wagmi/chains';
-import { injected, metaMask } from 'wagmi/connectors';
 
-// Простая конфигурация без RainbowKit для разработки
-export const config = createConfig({
+// Get WalletConnect project ID from environment
+const projectId = (import.meta as any).env?.VITE_WALLET_CONNECT_PROJECT_ID || '9e98509478d0b84f330ef9993dad22b3';
+
+// RainbowKit configuration - getDefaultConfig automatically includes Rainbow Wallet
+export const config = getDefaultConfig({
+  appName: 'Sendly NFT Gift Cards',
+  projectId: projectId,
   chains: [base],
-  connectors: [
-    injected(),
-    metaMask(),
-  ],
-  transports: {
-    [base.id]: http(),
-  },
+  ssr: false,
 });
 
 export const chains = [base];
