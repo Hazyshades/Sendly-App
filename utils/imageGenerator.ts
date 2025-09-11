@@ -141,7 +141,7 @@ export class ImageGenerator {
   }
 
   // Generate QR code for the gift card
-  async generateQRCode(data: string): Promise<Blob> {
+  async generateQRCode(_data: string): Promise<Blob> {
     // For now, we'll create a simple placeholder
     // In a real implementation, you'd use a QR code library like qrcode.js
     

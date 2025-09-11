@@ -32,6 +32,8 @@ export default function App() {
   }, [isConnected, address]);
 
   const preloadHistoryData = async () => {
+    if (!address) return;
+    
     try {
       console.log('Preloading history data for:', address);
       // Initialize web3 service

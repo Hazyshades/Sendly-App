@@ -1,4 +1,4 @@
-import { createPublicClient, http, getContract } from 'viem';
+import { createPublicClient, http } from 'viem';
 import { base } from 'viem/chains';
 import { 
   CONTRACT_ADDRESS, 
@@ -32,7 +32,7 @@ export class Web3Service {
   private account: string | null = null;
   private publicClient: any = null;
   private currentRpcIndex = 0;
-  private retryCount = 0;
+  // private _retryCount = 0; // Will be used in future retry logic
   private maxRetries = 1; // Reduced retries for faster failure
   private cache = new Map<string, { data: any; timestamp: number }>();
   private cacheExpiry = 300000; // 5 minutes cache
