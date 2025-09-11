@@ -52,12 +52,12 @@ export function TransactionHistory() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Добавляем refs для предотвращения повторных запросов
+  // Add refs to prevent duplicate requests
   const isFetchingRef = useRef(false);
   const lastAddressRef = useRef<string | null>(null);
   const lastConnectionStateRef = useRef<boolean | null>(null);
   
-  // Добавляем кэш для данных (увеличенное время кэширования до 5 минут)
+  // Add data cache (increased cache time to 5 minutes)
   const dataCacheRef = useRef<{
     address: string | null;
     analytics: Analytics | null;
@@ -71,20 +71,20 @@ export function TransactionHistory() {
   });
 
   useEffect(() => {
-    // Проверяем, изменились ли действительно важные параметры
+    // Check if important parameters have actually changed
     const addressChanged = lastAddressRef.current !== address;
     const connectionChanged = lastConnectionStateRef.current !== isConnected;
     
-    // Обновляем refs
+    // Update refs
     lastAddressRef.current = address || null;
     lastConnectionStateRef.current = isConnected;
     
-    // Если уже загружаем данные, не делаем повторный запрос
+    // If already loading data, don't make duplicate request
     if (isFetchingRef.current) {
       return;
     }
     
-    // Если параметры не изменились, не делаем запрос
+    // If parameters haven't changed, don't make request
     if (!addressChanged && !connectionChanged) {
       return;
     }
@@ -93,7 +93,7 @@ export function TransactionHistory() {
       fetchData();
     } else {
       setLoading(false);
-      // Сбрасываем данные если кошелек не подключен
+      // Reset data if wallet is not connected
       setAnalytics({
         totalSent: '0',
         totalReceived: '0',
@@ -110,9 +110,9 @@ export function TransactionHistory() {
   const fetchData = async () => {
     if (!isConnected || !address || isFetchingRef.current) return;
 
-    // Проверяем кэш (увеличенное время кэширования до 5 минут)
+    // Check cache (increased cache time to 5 minutes)
     const cacheAge = Date.now() - dataCacheRef.current.timestamp;
-    const cacheValid = cacheAge < 300000 && dataCacheRef.current.address === address; // 5 минут
+    const cacheValid = cacheAge < 300000 && dataCacheRef.current.address === address; // 5 minutes
     
     if (cacheValid && dataCacheRef.current.analytics && dataCacheRef.current.transactions) {
       console.log('Using cached data');
@@ -207,7 +207,7 @@ export function TransactionHistory() {
       console.log('Setting transactions:', blockchainTransactions);
       setTransactions(blockchainTransactions);
       
-      // Сохраняем данные в кэш
+      // Save data to cache
       dataCacheRef.current = {
         address: address || null,
         analytics: newAnalytics,
@@ -217,23 +217,23 @@ export function TransactionHistory() {
     } catch (error) {
       console.error('Error fetching data:', error);
       
-      // Проверяем различные типы ошибок
+      // Check different types of errors
       if (error instanceof Error) {
         if (error.message.includes('429')) {
-          toast.error('Слишком много запросов. Попробуйте позже.');
+          toast.error('Too many requests. Please try again later.');
         } else if (error.message.includes('Invalid parameters') || error.message.includes('eth_getLogs')) {
-          toast.error('Ошибка загрузки истории. Попробуйте обновить страницу.');
+          toast.error('Error loading history. Please refresh the page.');
         } else if (error.message.includes('timeout') || error.message.includes('Timeout')) {
-          toast.error('Превышено время ожидания. Проверьте соединение.');
+          toast.error('Request timeout. Please check your connection.');
         } else {
-          toast.error('Ошибка загрузки данных. Попробуйте позже.');
+          toast.error('Error loading data. Please try again later.');
         }
       } else {
-        toast.error('Неизвестная ошибка при загрузке данных.');
+        toast.error('Unknown error while loading data.');
       }
       
-      // При ошибке НЕ сбрасываем данные, если они уже были загружены
-      // Это предотвратит исчезновение данных при сетевых ошибках
+      // On error, DON'T reset data if it was already loaded
+      // This prevents data disappearance on network errors
       if (transactions.length === 0) {
         setAnalytics({
           totalSent: '0',
@@ -364,8 +364,8 @@ export function TransactionHistory() {
       <div className="p-6">
         <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-gray-600">Загрузка истории транзакций...</p>
-          <p className="text-gray-500 text-sm">Это может занять некоторое время при первом подключении</p>
+          <p className="text-gray-600">Loading transaction history...</p>
+          <p className="text-gray-500 text-sm">This may take some time on first connection</p>
           <div className="animate-pulse space-y-4">
             {[...Array(3)].map((_, i) => (
               <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
@@ -383,7 +383,7 @@ export function TransactionHistory() {
         <div className="flex gap-2">
           <Button 
             onClick={() => {
-              // Очищаем кэш и перезагружаем данные
+              // Clear cache and reload data
               dataCacheRef.current = {
                 address: null,
                 analytics: null,
@@ -398,7 +398,7 @@ export function TransactionHistory() {
             disabled={loading}
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Обновить
+            Refresh
           </Button>
           <Button onClick={handleExport} variant="outline">
             <Download className="w-4 h-4 mr-2" />

@@ -80,12 +80,12 @@ export class Web3Service {
     this.account = account;
   }
 
-  // Добавляем метод для безопасного выполнения запросов с retry и fallback RPC
+  // add method for safe request with retry and fallback RPC
   private async safeRequest<T>(requestFn: () => Promise<T>): Promise<T> {
     let lastError: any;
     const originalRpcIndex = this.currentRpcIndex;
     
-    // Сначала пробуем с текущим RPC
+    // first try with current RPC
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       try {
         return await requestFn();
@@ -93,7 +93,7 @@ export class Web3Service {
         lastError = error;
         console.log(`Attempt ${attempt + 1}/${this.maxRetries + 1} failed with RPC ${BASE_RPC_URLS[this.currentRpcIndex]}:`, error.message);
         
-        // Если это критическая ошибка или требует аутентификации, сразу переключаемся на другой RPC
+        // if this is critical error or requires authentication, switch to another RPC immediately
         if (error.message?.includes('503') || error.message?.includes('502') || error.message?.includes('500') || 
             error.message?.includes('401') || error.message?.includes('403') || error.message?.includes('400') ||
             error.message?.includes('Unauthorized') || error.message?.includes('Bad Request') ||
@@ -103,15 +103,15 @@ export class Web3Service {
           break;
         }
         
-        // Если это ошибка 429 (Too Many Requests), ждем дольше
+        // if this is 429 (Too Many Requests), wait longer
         if (error.message?.includes('429') || error.status === 429) {
-          const delay = Math.pow(2, attempt) * 1000; // Экспоненциальная задержка
+          const delay = Math.pow(2, attempt) * 1000; // exponential delay
           console.log(`Rate limited, waiting ${delay}ms before retry ${attempt + 1}/${this.maxRetries + 1}`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
         
-        // Для других ошибок делаем короткую паузу
+        // for other errors, make a short pause
         if (attempt < this.maxRetries) {
           await new Promise(resolve => setTimeout(resolve, 500));
           continue;
@@ -121,7 +121,7 @@ export class Web3Service {
       }
     }
     
-    // Если все попытки с текущим RPC не удались, пробуем другие RPC
+    // if all attempts with current RPC failed, try other RPCs
     console.log(`All attempts failed with current RPC, trying other RPCs...`);
     for (let rpcAttempt = 0; rpcAttempt < Math.min(BASE_RPC_URLS.length - 1, 2); rpcAttempt++) {
       await this.switchToNextRpc();
@@ -143,7 +143,7 @@ export class Web3Service {
       }
     }
     
-    // Если все RPC не работают, возвращаемся к исходному
+    // if all RPCs are not working, revert to original
     if (this.currentRpcIndex !== originalRpcIndex) {
       console.log(`All RPCs failed, reverting to original RPC`);
       this.currentRpcIndex = originalRpcIndex;
@@ -186,7 +186,7 @@ export class Web3Service {
       const maxConcurrentRequests = 8;
       const tokenIds: bigint[] = [];
       
-      // Сначала собираем все tokenId
+      // first collect all tokenId
       for (let index = 0; index < Number(balance); index++) {
         try {
           const tokenId = await this.safeRequest(async () => {
@@ -204,7 +204,7 @@ export class Web3Service {
         }
       }
       
-      // Затем параллельно получаем информацию по всем картам (с увеличенным ограничением)
+      // then parallel get information for all cards (with increased limit)
       const giftCardPromises = tokenIds.map(tokenId => 
         this.safeRequest(async () => {
           const giftCardInfo = await this.publicClient.readContract({
@@ -237,7 +237,7 @@ export class Web3Service {
         })
       );
       
-      // Выполняем запросы пакетами с увеличенным размером
+      // execute requests in batches with increased size
       for (let i = 0; i < giftCardPromises.length; i += maxConcurrentRequests) {
         const batch = giftCardPromises.slice(i, i + maxConcurrentRequests);
         try {
@@ -245,7 +245,7 @@ export class Web3Service {
           cards.push(...batchResults);
         } catch (error) {
           console.warn(`Failed to load batch of cards:`, error);
-          // Продолжаем с другими батчами
+          // continue with other batches
         }
       }
       
@@ -304,7 +304,7 @@ export class Web3Service {
       // Increased concurrent requests to 8 for better performance
       const maxConcurrentRequests = 8;
       
-      // Создаем промисы для получения информации по картам
+      // create promises for getting information for cards
       const cardPromises = logs.map((log: any) => {
         if (!log.args || !log.args.tokenId) return Promise.resolve(null);
         
@@ -337,7 +337,7 @@ export class Web3Service {
         });
       });
       
-      // Выполняем запросы пакетами с увеличенным размером
+      // execute requests in batches with increased size
       for (let i = 0; i < cardPromises.length; i += maxConcurrentRequests) {
         const batch = cardPromises.slice(i, i + maxConcurrentRequests);
         try {
@@ -346,7 +346,7 @@ export class Web3Service {
           sentCards.push(...validResults);
         } catch (error) {
           console.warn(`Failed to load batch of sent cards:`, error);
-          // Продолжаем с другими батчами
+            // continue with other batches
         }
       }
       
