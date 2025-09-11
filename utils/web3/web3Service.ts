@@ -33,7 +33,9 @@ export class Web3Service {
   private publicClient: any = null;
   private currentRpcIndex = 0;
   private retryCount = 0;
-  private maxRetries = 2; // Уменьшаем количество попыток для более быстрого переключения
+  private maxRetries = 1; // Reduced retries for faster failure
+  private cache = new Map<string, { data: any; timestamp: number }>();
+  private cacheExpiry = 300000; // 5 minutes cache
 
   constructor() {
     this.createPublicClient();
@@ -46,9 +48,9 @@ export class Web3Service {
     this.publicClient = createPublicClient({
       chain: base,
       transport: http(rpcUrl, {
-        retryCount: 2,
-        retryDelay: 3000,
-        timeout: 10000,
+        retryCount: 1,
+        retryDelay: 1000,
+        timeout: 8000, // Reduced timeout
       }),
     });
   }
@@ -57,6 +59,20 @@ export class Web3Service {
     this.currentRpcIndex = (this.currentRpcIndex + 1) % BASE_RPC_URLS.length;
     console.log(`Switching to RPC ${this.currentRpcIndex + 1}/${BASE_RPC_URLS.length}: ${BASE_RPC_URLS[this.currentRpcIndex]}`);
     this.createPublicClient();
+  }
+
+  // Cache helper methods
+  private getCache(key: string): any {
+    const cached = this.cache.get(key);
+    if (cached && Date.now() - cached.timestamp < this.cacheExpiry) {
+      return cached.data;
+    }
+    this.cache.delete(key);
+    return null;
+  }
+
+  private setCache(key: string, data: any): void {
+    this.cache.set(key, { data, timestamp: Date.now() });
   }
 
   async initialize(walletClient: any, account: string) {
@@ -77,7 +93,7 @@ export class Web3Service {
         lastError = error;
         console.log(`Attempt ${attempt + 1}/${this.maxRetries + 1} failed with RPC ${BASE_RPC_URLS[this.currentRpcIndex]}:`, error.message);
         
-        // Если это критическая ошибка (503, 502, 500, 401, 403, 400) или требует аутентификации, сразу переключаемся на другой RPC
+        // Если это критическая ошибка или требует аутентификации, сразу переключаемся на другой RPC
         if (error.message?.includes('503') || error.message?.includes('502') || error.message?.includes('500') || 
             error.message?.includes('401') || error.message?.includes('403') || error.message?.includes('400') ||
             error.message?.includes('Unauthorized') || error.message?.includes('Bad Request') ||
@@ -89,7 +105,7 @@ export class Web3Service {
         
         // Если это ошибка 429 (Too Many Requests), ждем дольше
         if (error.message?.includes('429') || error.status === 429) {
-          const delay = Math.pow(2, attempt) * 2000; // Экспоненциальная задержка
+          const delay = Math.pow(2, attempt) * 1000; // Экспоненциальная задержка
           console.log(`Rate limited, waiting ${delay}ms before retry ${attempt + 1}/${this.maxRetries + 1}`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
@@ -97,7 +113,7 @@ export class Web3Service {
         
         // Для других ошибок делаем короткую паузу
         if (attempt < this.maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 500));
           continue;
         }
         
@@ -107,7 +123,7 @@ export class Web3Service {
     
     // Если все попытки с текущим RPC не удались, пробуем другие RPC
     console.log(`All attempts failed with current RPC, trying other RPCs...`);
-    for (let rpcAttempt = 0; rpcAttempt < BASE_RPC_URLS.length - 1; rpcAttempt++) {
+    for (let rpcAttempt = 0; rpcAttempt < Math.min(BASE_RPC_URLS.length - 1, 2); rpcAttempt++) {
       await this.switchToNextRpc();
       
       for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
@@ -118,7 +134,7 @@ export class Web3Service {
           console.log(`Attempt ${attempt + 1}/${this.maxRetries + 1} failed with RPC ${BASE_RPC_URLS[this.currentRpcIndex]}:`, error.message);
           
           if (attempt < this.maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 500));
             continue;
           }
           
@@ -140,6 +156,13 @@ export class Web3Service {
   async loadGiftCards(): Promise<GiftCardInfo[]> {
     if (!this.account) return [];
 
+    const cacheKey = `giftCards_${this.account}`;
+    const cached = this.getCache(cacheKey);
+    if (cached) {
+      console.log('Using cached gift cards data');
+      return cached;
+    }
+
     try {
       // Get balance using readContract with retry
       const balance = await this.safeRequest(async () => {
@@ -151,14 +174,21 @@ export class Web3Service {
         });
       });
       
-      if (BigInt(balance) === BigInt(0)) return [];
+      if (BigInt(balance) === BigInt(0)) {
+        const emptyResult: GiftCardInfo[] = [];
+        this.setCache(cacheKey, emptyResult);
+        return emptyResult;
+      }
 
       const cards: GiftCardInfo[] = [];
       
-      // Use tokenOfOwnerByIndex to get all tokens owned by this account
+      // Increased concurrent requests to 8 for better performance
+      const maxConcurrentRequests = 8;
+      const tokenIds: bigint[] = [];
+      
+      // Сначала собираем все tokenId
       for (let index = 0; index < Number(balance); index++) {
         try {
-          // Get token ID at specific index for this owner with retry
           const tokenId = await this.safeRequest(async () => {
             return await this.publicClient.readContract({
               address: CONTRACT_ADDRESS as `0x${string}`,
@@ -167,21 +197,23 @@ export class Web3Service {
               args: [this.account as `0x${string}`, BigInt(index)],
             });
           });
-          
-          // Get gift card info using readContract with retry
-          const giftCardInfo = await this.safeRequest(async () => {
-            return await this.publicClient.readContract({
-              address: CONTRACT_ADDRESS as `0x${string}`,
-              abi: GiftCardABI,
-              functionName: 'getGiftCardInfo',
-              args: [BigInt(tokenId)],
-            });
+          tokenIds.push(tokenId);
+        } catch (error) {
+          console.warn(`Failed to get tokenId at index ${index}:`, error);
+          continue;
+        }
+      }
+      
+      // Затем параллельно получаем информацию по всем картам (с увеличенным ограничением)
+      const giftCardPromises = tokenIds.map(tokenId => 
+        this.safeRequest(async () => {
+          const giftCardInfo = await this.publicClient.readContract({
+            address: CONTRACT_ADDRESS as `0x${string}`,
+            abi: GiftCardABI,
+            functionName: 'getGiftCardInfo',
+            args: [tokenId],
           });
           
-          const amount = this.formatAmount(giftCardInfo.amount);
-          const token = giftCardInfo.token.toLowerCase() === USDC_ADDRESS.toLowerCase() ? 'USDC' : 'USDT';
-          
-          // Try to get the creator of this card
           let sender = 'Unknown';
           try {
             sender = await this.getCardCreator(tokenId.toString());
@@ -189,7 +221,10 @@ export class Web3Service {
             console.warn(`Could not get creator for card ${tokenId}:`, error);
           }
           
-          cards.push({
+          const amount = this.formatAmount(giftCardInfo.amount);
+          const token = giftCardInfo.token.toLowerCase() === USDC_ADDRESS.toLowerCase() ? 'USDC' : 'USDT';
+          
+          return {
             tokenId: tokenId.toString(),
             recipient: this.account!,
             sender,
@@ -198,13 +233,23 @@ export class Web3Service {
             message: giftCardInfo.message,
             redeemed: giftCardInfo.redeemed,
             type: 'received'
-          });
+          } as GiftCardInfo;
+        })
+      );
+      
+      // Выполняем запросы пакетами с увеличенным размером
+      for (let i = 0; i < giftCardPromises.length; i += maxConcurrentRequests) {
+        const batch = giftCardPromises.slice(i, i + maxConcurrentRequests);
+        try {
+          const batchResults = await Promise.all(batch);
+          cards.push(...batchResults);
         } catch (error) {
-          console.warn(`Failed to load card at index ${index}:`, error);
-          continue;
+          console.warn(`Failed to load batch of cards:`, error);
+          // Продолжаем с другими батчами
         }
       }
       
+      this.setCache(cacheKey, cards);
       return cards;
     } catch (error) {
       console.error('Error loading gift cards:', error);
@@ -215,14 +260,21 @@ export class Web3Service {
   async loadSentGiftCards(): Promise<GiftCardInfo[]> {
     if (!this.account) return [];
 
+    const cacheKey = `sentGiftCards_${this.account}`;
+    const cached = this.getCache(cacheKey);
+    if (cached) {
+      console.log('Using cached sent gift cards data');
+      return cached;
+    }
+
     try {
       // Get current block number to calculate a reasonable fromBlock
       const currentBlock = await this.safeRequest(async () => {
         return await this.publicClient.getBlockNumber();
       });
       
-      // Use last 50,000 blocks instead of 'earliest' to avoid RPC limitations
-      const fromBlock = Math.max(0, Number(currentBlock - 50000n));
+      // Further reduced block range for faster loading (last 5000 blocks)
+      const fromBlock = Math.max(0, Number(currentBlock - 5000n));
       
       console.log(`Loading sent gift cards from block ${fromBlock} to ${currentBlock}`);
       
@@ -249,26 +301,27 @@ export class Web3Service {
 
       const sentCards: GiftCardInfo[] = [];
       
-      for (const log of logs) {
-        try {
-          if (!log.args || !log.args.tokenId) continue;
-          
+      // Increased concurrent requests to 8 for better performance
+      const maxConcurrentRequests = 8;
+      
+      // Создаем промисы для получения информации по картам
+      const cardPromises = logs.map((log: any) => {
+        if (!log.args || !log.args.tokenId) return Promise.resolve(null);
+        
+        return this.safeRequest(async () => {
           const tokenId = log.args.tokenId.toString();
           
-          // Get gift card info
-          const giftCardInfo = await this.safeRequest(async () => {
-            return await this.publicClient.readContract({
-              address: CONTRACT_ADDRESS as `0x${string}`,
-              abi: GiftCardABI,
-              functionName: 'getGiftCardInfo',
-              args: [BigInt(tokenId)],
-            });
+          const giftCardInfo = await this.publicClient.readContract({
+            address: CONTRACT_ADDRESS as `0x${string}`,
+            abi: GiftCardABI,
+            functionName: 'getGiftCardInfo',
+            args: [BigInt(tokenId)],
           });
           
           const amount = this.formatAmount(giftCardInfo.amount);
           const token = giftCardInfo.token.toLowerCase() === USDC_ADDRESS.toLowerCase() ? 'USDC' : 'USDT';
           
-          sentCards.push({
+          return {
             tokenId,
             recipient: log.args.to as string,
             sender: this.account!,
@@ -277,13 +330,27 @@ export class Web3Service {
             message: giftCardInfo.message,
             redeemed: giftCardInfo.redeemed,
             type: 'sent'
-          });
-        } catch (error) {
+          } as GiftCardInfo;
+        }).catch(error => {
           console.warn(`Failed to load sent card ${log.args?.tokenId}:`, error);
-          continue;
+          return null;
+        });
+      });
+      
+      // Выполняем запросы пакетами с увеличенным размером
+      for (let i = 0; i < cardPromises.length; i += maxConcurrentRequests) {
+        const batch = cardPromises.slice(i, i + maxConcurrentRequests);
+        try {
+          const batchResults = await Promise.all(batch);
+          const validResults = batchResults.filter(result => result !== null) as GiftCardInfo[];
+          sentCards.push(...validResults);
+        } catch (error) {
+          console.warn(`Failed to load batch of sent cards:`, error);
+          // Продолжаем с другими батчами
         }
       }
       
+      this.setCache(cacheKey, sentCards);
       return sentCards;
     } catch (error) {
       console.error('Error loading sent gift cards:', error);
@@ -292,6 +359,12 @@ export class Web3Service {
   }
 
   async getGiftCardInfo(tokenId: string): Promise<BlockchainGiftCardInfo | null> {
+    const cacheKey = `giftCardInfo_${tokenId}`;
+    const cached = this.getCache(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     try {
       const giftCardInfo = await this.safeRequest(async () => {
         return await this.publicClient.readContract({
@@ -301,6 +374,7 @@ export class Web3Service {
           args: [BigInt(tokenId)],
         });
       });
+      this.setCache(cacheKey, giftCardInfo);
       return giftCardInfo;
     } catch (error) {
       console.error('Error getting gift card info:', error);
@@ -309,6 +383,12 @@ export class Web3Service {
   }
 
   async getCardOwner(tokenId: string): Promise<string> {
+    const cacheKey = `cardOwner_${tokenId}`;
+    const cached = this.getCache(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     try {
       const owner = await this.safeRequest(async () => {
         return await this.publicClient.readContract({
@@ -318,6 +398,7 @@ export class Web3Service {
           args: [BigInt(tokenId)],
         });
       });
+      this.setCache(cacheKey, owner);
       return owner;
     } catch (error) {
       console.error('Error getting card owner:', error);
@@ -326,14 +407,20 @@ export class Web3Service {
   }
 
   async getCardCreator(tokenId: string): Promise<string> {
+    const cacheKey = `cardCreator_${tokenId}`;
+    const cached = this.getCache(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     try {
       // Get current block number to calculate a reasonable fromBlock
       const currentBlock = await this.safeRequest(async () => {
         return await this.publicClient.getBlockNumber();
       });
       
-      // Use last 100,000 blocks instead of 'earliest' to avoid RPC limitations
-      const fromBlock = Math.max(0, Number(currentBlock - 100000n));
+      // Further reduced block range for faster loading (last 5000 blocks)
+      const fromBlock = Math.max(0, Number(currentBlock - 5000n));
       
       // Get Transfer events for this token from a reasonable range
       const logs = await this.safeRequest(async () => {
@@ -362,15 +449,22 @@ export class Web3Service {
         log.args.from === '0x0000000000000000000000000000000000000000'
       );
 
+      let creator;
       if (mintEvent && mintEvent.args) {
-        return mintEvent.args.to as string;
+        creator = mintEvent.args.to as string;
+      } else {
+        // Fallback to current owner if we can't find creator
+        creator = await this.getCardOwner(tokenId);
       }
 
-      throw new Error('Could not find card creator');
+      this.setCache(cacheKey, creator);
+      return creator;
     } catch (error) {
       console.error('Error getting card creator:', error);
       // Fallback to current owner if we can't find creator
-      return await this.getCardOwner(tokenId);
+      const owner = await this.getCardOwner(tokenId);
+      this.setCache(cacheKey, owner);
+      return owner;
     }
   }
 
@@ -392,11 +486,7 @@ export class Web3Service {
         });
       });
 
-
-
       if (BigInt(allowance) < BigInt(amountWei)) {
-
-        
         // Use writeContract directly
         const hash = await this.walletClient.writeContract({
           address: tokenAddress as `0x${string}`,
@@ -406,13 +496,9 @@ export class Web3Service {
           account: this.account as `0x${string}`,
         });
 
-
         await this.safeRequest(async () => {
           return await this.publicClient.waitForTransactionReceipt({ hash });
         });
-
-      } else {
-
       }
 
       return true;
@@ -434,16 +520,10 @@ export class Web3Service {
     }
 
     try {
-
-      
       const tokenAddress = tokenType === 'USDC' ? USDC_ADDRESS : USDT_ADDRESS;
       const amountWei = this.parseAmount(amount);
-      
-
 
       // Check balance - create contract instance with publicClient
-
-      
       // Try using readContract directly instead of getContract
       const balance = await this.safeRequest(async () => {
         return await this.publicClient.readContract({
@@ -453,19 +533,15 @@ export class Web3Service {
           args: [this.account as `0x${string}`],
         });
       });
-      
 
-      
       if (BigInt(balance) < BigInt(amountWei)) {
         throw new Error(`Insufficient ${tokenType} balance`);
       }
 
       // Approve tokens
-
       await this.approveToken(tokenAddress, amount);
 
       // Create gift card
-
       const hash = await this.walletClient.writeContract({
         address: CONTRACT_ADDRESS as `0x${string}`,
         abi: GiftCardABI,
@@ -480,12 +556,10 @@ export class Web3Service {
         account: this.account as `0x${string}`,
       });
 
-
       const receipt = await this.safeRequest(async () => {
         return await this.publicClient.waitForTransactionReceipt({ hash });
       });
 
-      
       // Get token ID from event
       const event = receipt.logs.find((log: any) => 
         log.topics[0] === '0x' + 'GiftCardCreated'.padEnd(64, '0')
@@ -496,7 +570,6 @@ export class Web3Service {
         // Parse token ID from event data
         tokenId = BigInt('0x' + event.topics[1].slice(26)).toString();
       }
-
 
       return { tokenId, txHash: hash };
     } catch (error) {
@@ -532,6 +605,12 @@ export class Web3Service {
   async getTokenBalance(tokenType: 'USDC' | 'USDT'): Promise<string> {
     if (!this.account) return '0';
 
+    const cacheKey = `tokenBalance_${tokenType}_${this.account}`;
+    const cached = this.getCache(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     try {
       const tokenAddress = tokenType === 'USDC' ? USDC_ADDRESS : USDT_ADDRESS;
       const balance = await this.safeRequest(async () => {
@@ -542,7 +621,9 @@ export class Web3Service {
           args: [this.account as `0x${string}`],
         });
       });
-      return this.formatAmount(balance);
+      const formattedBalance = this.formatAmount(balance);
+      this.setCache(cacheKey, formattedBalance);
+      return formattedBalance;
     } catch (error) {
       console.error(`Error getting ${tokenType} balance:`, error);
       return '0';
@@ -561,6 +642,11 @@ export class Web3Service {
   private formatAmount(amountWei: bigint): string {
     // Convert wei to amount (6 decimals for USDC/USDT)
     return (Number(amountWei) / 1000000).toString();
+  }
+
+  // Method to clear cache
+  clearCache(): void {
+    this.cache.clear();
   }
 }
 

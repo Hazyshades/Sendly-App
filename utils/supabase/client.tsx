@@ -10,7 +10,7 @@ const supabase = createClient(
 export { supabase };
 
 // Helper function to get the API base URL
-export const getApiUrl = () => `https://${projectId}.supabase.co/functions/v1/server`;
+export const getApiUrl = () => `https://${projectId}.supabase.co/functions/v1`;
 
 // Helper function to make authenticated API calls
 export const apiCall = async (endpoint: string, options: RequestInit = {}) => {

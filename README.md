@@ -8,7 +8,7 @@ A decentralized application for creating and managing NFT gift cards on the Base
 
 - Node.js 18+ 
 - npm or yarn
-- Web3-enabled browser (MetaMask, WalletConnect, etc.)
+- Web3-enabled browser (MetaMask, RainbowKit compatible wallets, etc.)
 
 ### Installation
 
@@ -34,7 +34,7 @@ npm run dev
 
 ### For Production (Optional)
 
-For full functionality with WalletConnect, create a `.env` file in the project root:
+For full functionality with RainbowKit wallet connections, create a `.env` file in the project root:
 
 ```env
 # WalletConnect Cloud Project ID
@@ -46,7 +46,7 @@ VITE_SUPABASE_URL=your_supabase_url_here
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 ```
 
-### WalletConnect Setup
+### RainbowKit WalletConnect Setup
 
 1. Go to [WalletConnect Cloud](https://cloud.walletconnect.com/)
 2. Create a new project
@@ -57,7 +57,7 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 
 - **Frontend**: React 18, TypeScript, Vite
 - **UI**: Tailwind CSS, Radix UI, Lucide React
-- **Web3**: Wagmi, Viem
+- **Web3**: Wagmi, Viem, RainbowKit
 - **Blockchain**: Base Network (Ethereum L2)
 - **Database**: Supabase (optional)
 
@@ -69,7 +69,7 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 │   ├── CreateGiftCard.tsx
 │   ├── MyCards.tsx
 │   ├── SpendCard.tsx
-│   └── WalletConnect.tsx
+│   └── RainbowWalletConnect.tsx
 ├── contracts/          # Smart contracts
 ├── utils/             # Utilities
 │   ├── web3/          # Web3 configuration
@@ -82,7 +82,7 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 
 - MetaMask
 - Injected wallets (Brave, Opera, etc.)
-- WalletConnect (when projectId is configured)
+- RainbowKit compatible wallets (when projectId is configured)
 
 ## 🌐 Network
 
@@ -91,5 +91,3 @@ The application runs on the **Base** network.
 ## 📝 License
 
 MIT License
-
-

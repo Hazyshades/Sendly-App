@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Calendar, TrendingUp, Gift, ArrowUpRight, ArrowDownLeft, Filter, Download, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Calendar, TrendingUp, Gift, ArrowUpRight, ArrowDownLeft, Download, RefreshCw } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Input } from './ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { toast } from 'sonner';
 import { useAccount } from 'wagmi';
 import { createWalletClient, custom } from 'viem';
@@ -58,7 +57,7 @@ export function TransactionHistory() {
   const lastAddressRef = useRef<string | null>(null);
   const lastConnectionStateRef = useRef<boolean | null>(null);
   
-  // Добавляем кэш для данных
+  // Добавляем кэш для данных (увеличенное время кэширования до 5 минут)
   const dataCacheRef = useRef<{
     address: string | null;
     analytics: Analytics | null;
@@ -111,9 +110,9 @@ export function TransactionHistory() {
   const fetchData = async () => {
     if (!isConnected || !address || isFetchingRef.current) return;
 
-    // Проверяем кэш (кэш действителен 60 секунд)
+    // Проверяем кэш (увеличенное время кэширования до 5 минут)
     const cacheAge = Date.now() - dataCacheRef.current.timestamp;
-    const cacheValid = cacheAge < 60000 && dataCacheRef.current.address === address;
+    const cacheValid = cacheAge < 300000 && dataCacheRef.current.address === address; // 5 минут
     
     if (cacheValid && dataCacheRef.current.analytics && dataCacheRef.current.transactions) {
       console.log('Using cached data');
@@ -281,6 +280,19 @@ export function TransactionHistory() {
     }
   };
 
+  const shortenAddress = (address: string) => {
+    if (!address) return '';
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
+
+  const handleAddressClick = (address: string) => {
+    window.open(`https://debank.com/profile/${address}`, '_blank');
+  };
+
+  const handleTxHashClick = (txHash: string) => {
+    window.open(`https://basescan.org/tx/${txHash}`, '_blank');
+  };
+
   const filteredTransactions = transactions.filter(tx => {
     const matchesSearch = tx.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          tx.counterpart.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -353,6 +365,7 @@ export function TransactionHistory() {
         <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="text-gray-600">Загрузка истории транзакций...</p>
+          <p className="text-gray-500 text-sm">Это может занять некоторое время при первом подключении</p>
           <div className="animate-pulse space-y-4">
             {[...Array(3)].map((_, i) => (
               <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
@@ -377,6 +390,8 @@ export function TransactionHistory() {
                 transactions: null,
                 timestamp: 0
               };
+              // Clear web3 service cache too
+              web3Service.clearCache();
               fetchData();
             }} 
             variant="outline"
@@ -503,30 +518,38 @@ export function TransactionHistory() {
           filteredTransactions.map((tx) => (
             <Card key={tx.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-4 flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       {getTypeIcon(tx.type)}
                       <div>
                         <div className={`font-medium ${getTypeColor(tx.type)}`}>
                           {tx.type.charAt(0).toUpperCase() + tx.type.slice(1)} ${tx.amount} {tx.currency}
                         </div>
-                        <div className="text-sm text-gray-600">
-                          {tx.counterpart}
+                        <div className="text-sm">
+                          <button
+                            onClick={() => handleAddressClick(tx.counterpart)}
+                            className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors"
+                            title={`View on Debank: ${tx.counterpart}`}
+                          >
+                            {shortenAddress(tx.counterpart)}
+                          </button>
                         </div>
                       </div>
                     </div>
                     
-                    <div className="text-sm text-gray-600 max-w-xs truncate">
-                      "{tx.message}"
+                    <div className="text-sm text-gray-600 flex-1 min-w-0">
+                      <div className="break-words">
+                        {tx.message}
+                      </div>
                     </div>
                   </div>
                   
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4 flex-shrink-0">
                     <Badge className={getStatusColor(tx.status)}>
                       {tx.status}
                     </Badge>
-                    <div className="text-right text-sm text-gray-500">
+                    <div className="text-right text-sm text-gray-500 whitespace-nowrap">
                       <div>{new Date(tx.timestamp).toLocaleDateString()}</div>
                       <div>{new Date(tx.timestamp).toLocaleTimeString()}</div>
                     </div>
@@ -534,8 +557,14 @@ export function TransactionHistory() {
                 </div>
                 
                 <div className="mt-2 text-xs text-gray-500">
-                  TX: {tx.txHash.slice(0, 10)}...{tx.txHash.slice(-8)}
-                  {tx.gasUsed && ` • Gas: ${tx.gasUsed} ETH`}
+                  <span>TX: </span>
+                  <button
+                    onClick={() => handleTxHashClick(tx.txHash)}
+                    className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors"
+                    title={`View on Basescan: ${tx.txHash}`}
+                  >
+                    {tx.txHash.slice(0, 10)}...{tx.txHash.slice(-8)}
+                  </button>
                 </div>
               </CardContent>
             </Card>

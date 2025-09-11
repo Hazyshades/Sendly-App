@@ -1,7 +1,7 @@
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { base } from 'wagmi/chains';
 
-// Get WalletConnect project ID from environment
+// Get WalletConnect project ID from environment for RainbowKit
 const projectId = (import.meta as any).env?.VITE_WALLET_CONNECT_PROJECT_ID || '9e98509478d0b84f330ef9993dad22b3';
 
 // RainbowKit configuration - getDefaultConfig automatically includes Rainbow Wallet

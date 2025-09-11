@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Gift, Wallet } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Card } from './components/ui/card';
@@ -12,6 +12,9 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { Toaster } from './components/ui/sonner';
 import { useAccount } from 'wagmi';
 import { toast } from 'sonner';
+import web3Service from './utils/web3/web3Service';
+import { createWalletClient, custom } from 'viem';
+import { base } from 'viem/chains';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('create');
@@ -19,7 +22,39 @@ export default function App() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [loading] = useState(false);
   const [selectedTokenId, setSelectedTokenId] = useState<string>('');
-  const { isConnected } = useAccount();
+  const { isConnected, address } = useAccount();
+  
+  // Preload history data when wallet is connected
+  useEffect(() => {
+    if (isConnected && address) {
+      preloadHistoryData();
+    }
+  }, [isConnected, address]);
+
+  const preloadHistoryData = async () => {
+    try {
+      console.log('Preloading history data for:', address);
+      // Initialize web3 service
+      const walletClient = createWalletClient({
+        chain: base,
+        transport: custom(window.ethereum)
+      });
+
+      await web3Service.initialize(walletClient, address);
+      
+      // Load received gift cards first (usually faster)
+      console.log('Preloading received gift cards...');
+      await web3Service.loadGiftCards();
+      
+      // Load sent gift cards (can be slower due to logs)
+      console.log('Preloading sent gift cards...');
+      await web3Service.loadSentGiftCards();
+      
+      console.log('History data preloaded successfully');
+    } catch (error) {
+      console.error('Error preloading history data:', error);
+    }
+  };
 
   const handleSpendCard = (tokenId: string) => {
     setSelectedTokenId(tokenId);
