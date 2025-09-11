@@ -503,10 +503,18 @@ export function CreateGiftCard() {
           {createdCard && (
             <Alert>
               <CheckCircle className="h-4 w-4" />
-              <AlertDescription>
-                Gift card created successfully! Token ID: {createdCard.id}
-                <br />
-                Transaction: {createdCard.tx_hash}
+              <AlertDescription className="space-y-2">
+                <div>Gift card created successfully! Token ID: {createdCard.id}</div>
+                <div className="text-sm">
+                  TX: 
+                  <button
+                    onClick={() => window.open(`https://basescan.org/tx/${createdCard.tx_hash}`, '_blank')}
+                    className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors ml-1"
+                    title={`View on Basescan: ${createdCard.tx_hash}`}
+                  >
+                    {createdCard.tx_hash.slice(0, 10)}...{createdCard.tx_hash.slice(-8)}
+                  </button>
+                </div>
               </AlertDescription>
             </Alert>
           )}

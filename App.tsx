@@ -8,6 +8,7 @@ import { MyCards } from './components/MyCards';
 import { SpendCard } from './components/SpendCard';
 import { TransactionHistory } from './components/TransactionHistory';
 import { AuthModal } from './components/AuthModal';
+import { BaseLogo } from './components/BaseLogo';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { Toaster } from './components/ui/sonner';
 import { useAccount } from 'wagmi';
@@ -80,11 +81,7 @@ export default function App() {
         </div>
         
         <div className="flex items-center gap-4">
-          <img 
-            src="/styles/Base_lockup_2color.svg" 
-            alt="Base Logo" 
-            className="h-4 w-auto"
-          />
+          <BaseLogo className="h-6 w-auto text-white opacity-90 hover:opacity-100 transition-opacity" />
           <ConnectButton />
           <div className="relative">
             <Button 
