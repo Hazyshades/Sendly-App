@@ -17,8 +17,8 @@ export class PinataService {
 
   constructor() {
     // Load environment variables from Vite
-    this.apiKey = import.meta.env.VITE_PINATA_API_KEY || '8edb81ceca8d03963ee4';
-    this.secretKey = import.meta.env.VITE_PINATA_SECRET_API_KEY || '1c0a0f721f587b961ff33da1636746ad086d206638ae7302327dc7b339de0a89';
+    this.apiKey = import.meta.env.VITE_PINATA_API_KEY || '';
+    this.secretKey = import.meta.env.VITE_PINATA_SECRET_API_KEY || '';
   }
 
   async uploadImage(imageBlob: Blob): Promise<string> {
