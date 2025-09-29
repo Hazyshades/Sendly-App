@@ -38,7 +38,7 @@ contract GiftCard is ERC721Enumerable, ERC721URIStorage, Ownable {
 
     constructor(address _usdcAddress, address _usdtAddress)
         ERC721("GiftCard", "GIFT")
-        Ownable()
+        Ownable(msg.sender)
     {
         usdcToken = IERC20(_usdcAddress);
         usdtToken = IERC20(_usdtAddress);
@@ -110,28 +110,28 @@ contract GiftCard is ERC721Enumerable, ERC721URIStorage, Ownable {
 
     // --- SOLIDITY OVERRIDES FOR MULTIPLE INHERITANCE ---
 
-    function _beforeTokenTransfer(
-        address from,
-        address to,
-        uint256 tokenId
-    ) internal override(ERC721, ERC721Enumerable) {
-        super._beforeTokenTransfer(from, to, tokenId);
+    function _update(address to, uint256 tokenId, address auth)
+        internal
+        override(ERC721, ERC721Enumerable)
+        returns (address)
+    {
+        return super._update(to, tokenId, auth);
+    }
+
+    function _increaseBalance(address account, uint128 value)
+        internal
+        override(ERC721, ERC721Enumerable)
+    {
+        super._increaseBalance(account, value);
     }
 
     function supportsInterface(bytes4 interfaceId)
         public
         view
-        override(ERC721, ERC721Enumerable)
+        override(ERC721Enumerable, ERC721URIStorage)
         returns (bool)
     {
         return super.supportsInterface(interfaceId);
-    }
-
-    function _burn(uint256 tokenId)
-        internal
-        override(ERC721, ERC721URIStorage)
-    {
-        super._burn(tokenId);
     }
 
     function tokenURI(uint256 tokenId)
