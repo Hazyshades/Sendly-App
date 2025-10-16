@@ -25,9 +25,9 @@
     "primaryCategory": "finance",
     "tags": ["nft", "gift-cards", "base", "crypto", "gifting"],
     "heroImageUrl": "https://sendly-app.vercel.app/hero.png",
-    "tagline": "Send crypto gift cards instantly",
-    "ogTitle": "Sendly - NFT Gift Cards on Base",
-    "ogDescription": "Create and send NFT gift cards on the Base network. Perfect for gifting crypto and digital experiences.",
+    "tagline": "Send Crypto gift cards",
+    "ogTitle": "Sendly - Gift Cards on Base",
+    "ogDescription": "Create and send NFT gift cards on the Base. Perfect for gifting crypto and digital experiences.",
     "ogImageUrl": "https://sendly-app.vercel.app/og-image.png",
     "noindex": false
   }
