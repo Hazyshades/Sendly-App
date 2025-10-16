@@ -1,0 +1,34 @@
+{
+  "accountAssociation": {
+    "header": "",
+    "payload": "",
+    "signature": ""
+  },
+  "baseBuilder": {
+    "allowedAddresses": ["0xfA198e595b746bC5b6DF738267424D2a7A61291d"]
+  },
+  "miniapp": {
+    "version": "1",
+    "name": "Sendly",
+    "homeUrl": "https://sendly-app.vercel.app/",
+    "iconUrl": "https://sendly-app.vercel.app/base-logo.png",
+    "splashImageUrl": "https://sendly-app.vercel.app/base-logo.png",
+    "splashBackgroundColor": "#8B5CF6",
+    "webhookUrl": "https://sendly-app.vercel.app/api/webhook",
+    "subtitle": "NFT Gift Cards on Base",
+    "description": "Create and send NFT gift cards on the Base network. Perfect for gifting crypto and digital experiences.",
+    "screenshotUrls": [
+      "https://sendly-app.vercel.app/screenshot1.png",
+      "https://sendly-app.vercel.app/screenshot2.png",
+      "https://sendly-app.vercel.app/screenshot3.png"
+    ],
+    "primaryCategory": "finance",
+    "tags": ["nft", "gift-cards", "base", "crypto", "gifting"],
+    "heroImageUrl": "https://sendly-app.vercel.app/hero.png",
+    "tagline": "Send crypto gift cards instantly",
+    "ogTitle": "Sendly - NFT Gift Cards on Base",
+    "ogDescription": "Create and send NFT gift cards on the Base network. Perfect for gifting crypto and digital experiences.",
+    "ogImageUrl": "https://sendly-app.vercel.app/og-image.png",
+    "noindex": false
+  }
+}

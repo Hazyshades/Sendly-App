@@ -13,12 +13,27 @@ import { useAccount } from 'wagmi';
 import web3Service from './utils/web3/web3Service';
 import { createWalletClient, custom } from 'viem';
 import { base } from 'viem/chains';
+import { sdk } from '@farcaster/miniapp-sdk';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('create');
   const [selectedTokenId, setSelectedTokenId] = useState<string>('');
   const { isConnected, address } = useAccount();
   
+  // Initialize Mini App SDK
+  useEffect(() => {
+    const initializeMiniApp = async () => {
+      try {
+        await sdk.actions.ready();
+        console.log('Mini App SDK initialized successfully');
+      } catch (error) {
+        console.error('Failed to initialize Mini App SDK:', error);
+      }
+    };
+
+    initializeMiniApp();
+  }, []);
+
   // Preload history data when wallet is connected
   useEffect(() => {
     if (isConnected && address) {
