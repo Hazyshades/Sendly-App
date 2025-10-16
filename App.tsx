@@ -97,7 +97,7 @@ export default function App() {
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-4 bg-white/90 backdrop-blur-sm">
               <TabsTrigger value="create" className="data-[state=active]:bg-white">
-                Create a gift card
+                Create a card
               </TabsTrigger>
               <TabsTrigger value="my-cards" className="data-[state=active]:bg-white">
                 My cards
