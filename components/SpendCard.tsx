@@ -40,9 +40,17 @@ export function SpendCard({ selectedTokenId = '', onClearTokenId }: SpendCardPro
   const [cardInput, setCardInput] = useState('');
   const [password, setPassword] = useState('');
   const [currentCard, setCurrentCard] = useState<RedeemableCard | null>(null);
+  const [selectedService, setSelectedService] = useState<string | null>(null);
 
   const [redeemStep, setRedeemStep] = useState<'input' | 'verify' | 'redeem' | 'success'>('input');
   const [error, setError] = useState('');
+
+  // Service URLs for redirect
+  const serviceUrls = {
+    amazon: "https://www.amazon.com/gift-cards/",
+    apple: "https://www.apple.com/uk/shop/gift-cards",
+    airbnb: "https://www.airbnb.com/giftcards"
+  };
 
   // Auto-fill Token ID if provided from MyCards
   useEffect(() => {
@@ -168,6 +176,11 @@ export function SpendCard({ selectedTokenId = '', onClearTokenId }: SpendCardPro
 
   const handleRedeem = async () => {
     if (!currentCard || !isConnected || !address) return;
+    
+    if (!selectedService) {
+      setError('Please select a service to spend your gift card on.');
+      return;
+    }
 
     try {
       // Initialize web3 service
@@ -182,10 +195,17 @@ export function SpendCard({ selectedTokenId = '', onClearTokenId }: SpendCardPro
       await web3Service.redeemGiftCard(currentCard.tokenId);
       
       setRedeemStep('success');
-      toast.success('Gift card redeemed successfully!');
+      toast.success(`Gift card redeemed successfully for ${selectedService.charAt(0).toUpperCase() + selectedService.slice(1)}!`);
       
       // Update card status
       setCurrentCard(prev => prev ? { ...prev, status: 'redeemed' } : null);
+      
+      // Redirect to service page after 2 seconds
+      setTimeout(() => {
+        if (selectedService && serviceUrls[selectedService as keyof typeof serviceUrls]) {
+          window.open(serviceUrls[selectedService as keyof typeof serviceUrls], '_blank');
+        }
+      }, 2000);
       
 
     } catch (error) {
@@ -209,6 +229,7 @@ export function SpendCard({ selectedTokenId = '', onClearTokenId }: SpendCardPro
     setCardInput('');
     setPassword('');
     setCurrentCard(null);
+    setSelectedService(null);
 
     setRedeemStep('input');
     setError('');
@@ -326,16 +347,91 @@ export function SpendCard({ selectedTokenId = '', onClearTokenId }: SpendCardPro
                 </CardContent>
               </Card>
 
-              <div className="text-sm text-gray-600 space-y-2">
-                <p>From: {currentCard.sender}</p>
-                <p>Token ID: {currentCard.tokenId}</p>
-                {currentCard.expiresAt && (
-                  <p>Expires: {new Date(currentCard.expiresAt).toLocaleDateString()}</p>
-                )}
+              {/* Service Selection */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-gray-700 text-center">Choose where to spend your gift card:</h4>
+                <div className="flex justify-center gap-4">
+                  {/* Airbnb */}
+                  <div 
+                    className={`flex flex-col items-center cursor-pointer transition-all duration-200 ${
+                      selectedService === 'airbnb' ? 'scale-110' : 'hover:scale-105'
+                    }`}
+                    onClick={() => setSelectedService('airbnb')}
+                  >
+                    <div className={`w-16 h-16 rounded-lg overflow-hidden shadow-sm mb-2 border-2 transition-all duration-200 ${
+                      selectedService === 'airbnb' ? 'border-blue-500 shadow-lg' : 'border-gray-200 hover:border-blue-300'
+                    }`}>
+                      <img 
+                        src="/airbnb.jpg" 
+                        alt="Airbnb" 
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <span className={`text-xs font-medium transition-colors ${
+                      selectedService === 'airbnb' ? 'text-blue-600' : 'text-gray-600'
+                    }`}>
+                      Airbnb
+                    </span>
+                  </div>
+
+                  {/* Amazon */}
+                  <div 
+                    className={`flex flex-col items-center cursor-pointer transition-all duration-200 ${
+                      selectedService === 'amazon' ? 'scale-110' : 'hover:scale-105'
+                    }`}
+                    onClick={() => setSelectedService('amazon')}
+                  >
+                    <div className={`w-16 h-16 rounded-lg overflow-hidden shadow-sm mb-2 border-2 transition-all duration-200 ${
+                      selectedService === 'amazon' ? 'border-orange-500 shadow-lg' : 'border-gray-200 hover:border-orange-300'
+                    }`}>
+                      <img 
+                        src="/amazon.jpg" 
+                        alt="Amazon" 
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <span className={`text-xs font-medium transition-colors ${
+                      selectedService === 'amazon' ? 'text-orange-600' : 'text-gray-600'
+                    }`}>
+                      Amazon
+                    </span>
+                  </div>
+
+                  {/* Apple */}
+                  <div 
+                    className={`flex flex-col items-center cursor-pointer transition-all duration-200 ${
+                      selectedService === 'apple' ? 'scale-110' : 'hover:scale-105'
+                    }`}
+                    onClick={() => setSelectedService('apple')}
+                  >
+                    <div className={`w-16 h-16 rounded-lg overflow-hidden shadow-sm mb-2 border-2 transition-all duration-200 ${
+                      selectedService === 'apple' ? 'border-gray-500 shadow-lg' : 'border-gray-200 hover:border-gray-400'
+                    }`}>
+                      <img 
+                        src="/apple.jpg" 
+                        alt="Apple" 
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <span className={`text-xs font-medium transition-colors ${
+                      selectedService === 'apple' ? 'text-gray-800' : 'text-gray-600'
+                    }`}>
+                      Apple
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              <Button onClick={handleRedeem} className="w-full" size="lg">
-                Redeem gift card
+              <Button 
+                onClick={handleRedeem} 
+                className="w-full" 
+                size="lg"
+                disabled={!selectedService}
+              >
+                {selectedService 
+                  ? `Redeem for ${selectedService.charAt(0).toUpperCase() + selectedService.slice(1)}` 
+                  : 'Select a service first'
+                }
               </Button>
             </div>
           )}
@@ -348,6 +444,15 @@ export function SpendCard({ selectedTokenId = '', onClearTokenId }: SpendCardPro
                   Gift card redeemed successfully! You have received ${currentCard.amount} {currentCard.currency}.
                 </AlertDescription>
               </Alert>
+
+              {selectedService && (
+                <Alert className="border-blue-200 bg-blue-50">
+                  <AlertCircle className="h-4 w-4 text-blue-600" />
+                  <AlertDescription className="text-blue-800">
+                    Redirecting to {selectedService.charAt(0).toUpperCase() + selectedService.slice(1)} in a few seconds...
+                  </AlertDescription>
+                </Alert>
+              )}
 
               {currentCard.secretMessage && (
                 <Card>

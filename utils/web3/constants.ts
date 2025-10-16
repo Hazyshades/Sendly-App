@@ -1,5 +1,5 @@
 // Base Network Contract Addresses
-export const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || "0x980873Fe4b4D1426407BdAf49135a90eA84BAfb4";
+export const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || "0x7f5c9e8548002134cde6093f2ca3ff5b8bd26982";
 export const USDC_ADDRESS = import.meta.env.VITE_USDC_ADDRESS || "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 export const USDT_ADDRESS = import.meta.env.VITE_USDT_ADDRESS || "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2";
 
