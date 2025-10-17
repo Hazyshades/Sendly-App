@@ -12,7 +12,7 @@
     "name": "Sendly",
     "homeUrl": "https://sendly-app.vercel.app/",
     "iconUrl": "https://sendly-app.vercel.app/box.png",
-    "splashImageUrl": "https://sendly-app.vercel.app/box.png",
+    "splashImageUrl": "https://sendly-app.vercel.app/mobile-preview.jpg",
     "splashBackgroundColor": "#8B5CF6",
     "webhookUrl": "https://sendly-app.vercel.app/api/webhook",
     "subtitle": "NFT Gift Cards on Base",
