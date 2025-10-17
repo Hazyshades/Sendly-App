@@ -7,6 +7,7 @@ import { MyCards } from './components/MyCards';
 import { SpendCard } from './components/SpendCard';
 import { TransactionHistory } from './components/TransactionHistory';
 import { BaseLogo } from './components/BaseLogo';
+import { SplashScreen } from './components/SplashScreen';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { Toaster } from './components/ui/sonner';
 import { useAccount } from 'wagmi';
@@ -18,6 +19,7 @@ import { sdk } from '@farcaster/miniapp-sdk';
 export default function App() {
   const [activeTab, setActiveTab] = useState('create');
   const [selectedTokenId, setSelectedTokenId] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(true);
   const { isConnected, address } = useAccount();
   
   // Initialize Mini App SDK
@@ -28,6 +30,11 @@ export default function App() {
         console.log('Mini App SDK initialized successfully');
       } catch (error) {
         console.error('Failed to initialize Mini App SDK:', error);
+      } finally {
+        // Hide splash screen after a minimum delay
+        setTimeout(() => {
+          setIsLoading(false);
+        }, 1500);
       }
     };
 
@@ -73,6 +80,11 @@ export default function App() {
     setActiveTab('spend');
   };
 
+
+  // Show splash screen while loading
+  if (isLoading) {
+    return <SplashScreen />;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-400 via-blue-500 to-purple-600">
