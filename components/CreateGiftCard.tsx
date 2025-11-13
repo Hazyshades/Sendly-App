@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from './ui/collapsible';
+import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { toast } from 'sonner';
 import { useAccount, useWalletClient } from 'wagmi';
 import { createWalletClient, custom, isAddress } from 'viem';
@@ -50,11 +51,11 @@ interface GiftCardData {
 }
 
 const SOCIAL_RECIPIENT_OPTIONS = [
-  { value: 'twitter', label: 'Twitter username' },
-  { value: 'twitch', label: 'Twitch username' },
-  { value: 'telegram', label: 'Telegram username' },
-  { value: 'tiktok', label: 'TikTok username' },
-  { value: 'instagram', label: 'Instagram username' }
+  { value: 'twitter', label: 'Twitter' },
+  { value: 'twitch', label: 'Twitch' },
+  { value: 'telegram', label: 'Telegram' },
+  { value: 'tiktok', label: 'TikTok' },
+  { value: 'instagram', label: 'Instagram' }
 ] as const;
 
 export function CreateGiftCard() {
@@ -1112,13 +1113,21 @@ export function CreateGiftCard() {
           <Checkbox
             id="advanced"
             checked={showAdvanced}
+            disabled={true}
             onCheckedChange={(checked) => {
               if (typeof checked === 'boolean') {
                 setShowAdvanced(checked);
               }
             }}
           />
-          <Label htmlFor="advanced" className="cursor-pointer">Advanced features</Label>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Label htmlFor="advanced" className="cursor-not-allowed opacity-50">Advanced features</Label>
+            </TooltipTrigger>
+            <TooltipContent>
+              Sorry, this feature is currently unavailable
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
