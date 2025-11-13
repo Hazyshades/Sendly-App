@@ -47,3 +47,13 @@ tmp/
 *.tmp
 *.bak
 *.orig
+
+*.md
+/artifacts/
+/cache/
+/contracts/
+.cursorignore
+/.git backup/
+/supabase/
+/.git backup/
+/.git backup2/

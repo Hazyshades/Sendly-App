@@ -1,134 +1,77 @@
-# Sendly NFT Gift Card dApp
+<<<<<<< HEAD
+# Sendly App
+=======
+# Sendly
 
-A decentralized application for creating and managing NFT gift cards on the Base network.
+**Sending funds by nickname on any social network.**
 
-## 🚀 Quick Start
+Live on: [sendly.digital](https://www.sendly.digital)
 
-### Prerequisites
+Backend repo: https://github.com/Hazyshades/Sendly-backend-agent
 
-- Node.js 18+ 
-- npm or yarn
-- Web3-enabled browser (MetaMask, RainbowKit compatible wallets, etc.)
+---
 
-### Installation
+## What is Sendly?
+>>>>>>> bfc9d63d400d5a9328afa97e6bb9f797e3e6cdee
 
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd sendly-nft-gift-card-dapp
-```
+Sendly makes it easy to unlock stablecoins for any person, even if they don't have a critical wallet yet. 
 
-2. Install dependencies:
-```bash
-npm install
-```
+The main idea is to send tokens via the username of the most popular social networks: X, Telegram, Instagram, Tiktok, etc.
 
-3. Start the development server:
-```bash
-npm run dev
-```
+<<<<<<< HEAD
+The agent part of the platform is based on the orchestration of Langraph and Telegram bot. It is possible to send funds using voice commands, check the balance, and plan your expenses through the planner.
 
-4. Open your browser and navigate to: `http://localhost:5173`
+## Features
+- NFT gift cards with custom messages, time locks, passwords, and AI-generated artwork.
+- Voice Payment Agent that converts spoken commands into on-chain gift cards using ElevenLabs and AIML API.
+- Social recipients via dedicated vaults for Twitter, Twitch, Telegram, TikTok, Instagram, or direct wallet addresses.
+- Internal wallet management backed by Circle APIs.
+- Contact manager that syncs personal and Privy-sourced social contacts, favorites, and wallet metadata.
+- Spend flow with passcode, timer, and ownership checks before redemption.
+- Transaction analytics with sent/received history, cache layer, and CSV export.
+- Circle BridgeKit integration to move USDC/EURC between Arc Testnet, Base Sepolia, Ethereum Sepolia, Polygon Amoy, and other configured chains.
+=======
+The agent part of the platform is based on the orchestration of Langraph and Telegram bot. It is possible to send funds using voice commands, create a flexible moneyflow, and plan your expenses through the planner.
 
-## 🔧 Configuration
+<img width="835" height="632" alt="image" src="https://github.com/user-attachments/assets/a569111e-e9db-470d-9237-d7470322eae6" />
 
-### For Production (Optional)
+## Features
+- NFT gift cards with custom messages, time locks, passwords, and AI-generated artwork.
+- Voice Payment Agent that converts spoken commands into on-chain action using **ElevenLabs** and **AIML API**.
+- Social recipients via dedicated vaults for Twitter, Twitch, Telegram, TikTok, Instagram, or direct wallet addresses.
+- Internal wallet management backed by **Circle SDK**.
+- Contact manager that syncs personal and **Privy**-sourced social contacts, favorites, and wallet metadata.
+- Transaction analytics with sent/received history, cache layer, and CSV export.
+- **Circle BridgeKit** integration to move funds between Arc Testnet and other configured chains.
+>>>>>>> bfc9d63d400d5a9328afa97e6bb9f797e3e6cdee
 
-For full functionality with RainbowKit wallet connections, create a `.env` file in the project root:
+## Tech Stack
+- React 18, TypeScript, Vite, TailwindCSS, shadcn/ui components.
+- wagmi, viem, and RainbowKit for wallet connectivity.
+- Privy for social OAuth (Twitter, Twitch, Telegram, etc.) and account management.
+- Supabase for gift card records, contacts, and developer wallet metadata.
+- Circle BridgeKit and Developer-Controlled Wallet SDKs.
+- ElevenLabs speech-to-text, AIML API command parsing, Pinata IPFS uploads, custom image generator.
+<<<<<<< HEAD
+- Hardhat + OpenZeppelin for Solidity contracts (`contracts/`).
+=======
+>>>>>>> bfc9d63d400d5a9328afa97e6bb9f797e3e6cdee
 
-```env
-# WalletConnect Cloud Project ID
-# Get a free projectId at https://cloud.walletconnect.com/
-VITE_WALLET_CONNECT_PROJECT_ID=your_project_id_here
+## Key Modules
+- `components/` – UI and logic for gift card creation, spending, history, voice agent, developer wallet, bridge dialog, and contact management.
+- `pages/` – Route-level containers for agent, create, my cards, spend, history, terms, privacy, and bridge flows.
+- `utils/` – Service layer for web3, Circle APIs, bridge config, Supabase, social integrations, and media handling.
 
-# Supabase Configuration
-VITE_SUPABASE_URL=your_supabase_url_here
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
-```
+## Required Services
+- Circle Developer-Controlled Wallets API for wallet lifecycle and testnet USDC/EURC.
+- Circle BridgeKit for cross-chain transfers.
+- Supabase project with the SQL schema from `supabase/migrations`.
+- ElevenLabs (speech), AIML API (command parsing), Pinata (IPFS) credentials.
+- Privy application configured for the desired social providers.
 
-### RainbowKit WalletConnect Setup
-
-1. Go to [WalletConnect Cloud](https://cloud.walletconnect.com/)
-2. Create a new project
-3. Copy the Project ID
-4. Add it to the environment variable `VITE_WALLET_CONNECT_PROJECT_ID`
-
-### Farcaster Mini App Setup
-
-The app includes Farcaster Mini App SDK integration with configuration in `public/.well-known/farcaster.json`. This enables:
-
-- Native Farcaster ecosystem integration
-- Farcaster user authentication
-- Mini app functionality within Farcaster clients
-
-To deploy as a Farcaster Mini App:
-1. Ensure your domain is verified in the Farcaster configuration
-2. Update the URLs in `farcaster.json` to match your production domain
-3. Deploy to a public domain (required for Farcaster Mini Apps)
-
-## 🛠️ Technologies
-
-- **Frontend**: React 18, TypeScript, Vite
-- **UI**: Tailwind CSS, Radix UI, Lucide React
-- **Web3**: Wagmi, Viem, RainbowKit
-- **Blockchain**: Base Network (Ethereum L2)
-- **Database**: Supabase (authentication & data storage)
-- **Social**: Farcaster Mini App SDK integration
-- **Authentication**: Supabase Auth with Google OAuth support
-
-## 📁 Project Structure
-
-```
-├── components/          # React components
-│   ├── ui/             # UI components (Radix UI)
-│   ├── figma/          # Figma-specific components
-│   ├── AuthModal.tsx   # Authentication modal
-│   ├── BaseLogo.tsx    # Base network logo
-│   ├── CreateGiftCard.tsx
-│   ├── MyCards.tsx
-│   ├── SpendCard.tsx
-│   ├── TransactionHistory.tsx
-│   └── RainbowWalletConnect.tsx
-├── supabase/           # Supabase functions and server code
-│   └── functions/      # Edge functions
-├── utils/              # Utilities
-│   ├── web3/          # Web3 configuration
-│   ├── supabase/      # Supabase client
-│   ├── imageGenerator.ts
-│   └── pinataService.ts
-├── public/             # Static assets
-│   └── .well-known/   # Farcaster configuration
-├── styles/            # CSS styles
-└── src/               # Source code
-```
-
-## 🔗 Supported Wallets
-
-- MetaMask
-- Injected wallets (Brave, Opera, etc.)
-- RainbowKit compatible wallets (when projectId is configured)
-
-## 🌐 Network
-
-The application runs on the **Base** network.
-
-## 🔐 Authentication
-
-The app supports multiple authentication methods:
-
-- **Web3 Wallet Connection**: Connect with MetaMask or other Web3 wallets
-- **Supabase Auth**: Email/password authentication with optional Google OAuth
-- **Farcaster Integration**: Native Farcaster Mini App support
-
-## 🚀 Features
-
-- **Create NFT Gift Cards**: Mint unique NFT gift cards on Base network
-- **Manage Cards**: View and manage your created and received gift cards
-- **Spend Cards**: Redeem gift cards for various services
-- **Transaction History**: Complete history of all gift card transactions
-- **Farcaster Mini App**: Native integration with Farcaster ecosystem
-- **Multi-wallet Support**: Compatible with various Web3 wallets
-
-## 📝 License
-
-MIT License
+## Status
+<<<<<<< HEAD
+The application targets Arc Testnet and Circle-supported testnets. Production readiness depends on completing the infrastructure outlined in the docs and providing live API credentials.
+=======
+The application targets Arc Testnet and Circle-supported testnets. For possible integrations, I am open to suggestions and will be happy to work with you. Contact on X: Leonissx
+>>>>>>> bfc9d63d400d5a9328afa97e6bb9f797e3e6cdee

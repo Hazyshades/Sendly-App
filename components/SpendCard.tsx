@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Camera, Gift, Lock, Clock, AlertCircle, CheckCircle } from 'lucide-react';
+import { Camera, Gift, Lock, Clock, AlertCircle, CheckCircle, ChevronDown } from 'lucide-react';
+import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -10,9 +11,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { toast } from 'sonner';
 import { useAccount } from 'wagmi';
 import { createWalletClient, custom } from 'viem';
-import { base } from 'viem/chains';
+import { baseChain } from '../utils/web3/wagmiConfig';
 import web3Service from '../utils/web3/web3Service';
-import { USDC_ADDRESS } from '../utils/web3/constants';
+import { GiftCardsService } from '../utils/supabase/giftCards';
+import { USDC_ADDRESS, USDT_ADDRESS } from '../utils/web3/constants';
 
 interface RedeemableCard {
   tokenId: string;
@@ -32,41 +34,59 @@ interface RedeemableCard {
 
 interface SpendCardProps {
   selectedTokenId?: string;
-  onClearTokenId: () => void;
 }
 
-export function SpendCard({ selectedTokenId = '', onClearTokenId }: SpendCardProps) {
+const TECH_GIANT_SERVICES = ['airbnb', 'amazon', 'apple'] as const;
+type TechGiantService = (typeof TECH_GIANT_SERVICES)[number];
+
+const SERVICE_DISPLAY_NAMES: Record<string, string> = {
+  amazon: 'Amazon',
+  apple: 'Apple',
+  airbnb: 'Airbnb',
+  stripe: 'Stripe'
+};
+
+export function SpendCard({ selectedTokenId = '' }: SpendCardProps) {
   const { address, isConnected } = useAccount();
   const [cardInput, setCardInput] = useState('');
   const [password, setPassword] = useState('');
   const [currentCard, setCurrentCard] = useState<RedeemableCard | null>(null);
   const [selectedService, setSelectedService] = useState<string | null>(null);
+  const [isTechGiantsOpen, setIsTechGiantsOpen] = useState(false);
 
   const [redeemStep, setRedeemStep] = useState<'input' | 'verify' | 'redeem' | 'success'>('input');
   const [error, setError] = useState('');
+
+  const isTechGiantsSelected =
+    selectedService !== null
+      ? TECH_GIANT_SERVICES.includes(selectedService as TechGiantService)
+      : false;
+  const selectedServiceLabel = selectedService
+    ? SERVICE_DISPLAY_NAMES[selectedService] ??
+      `${selectedService.charAt(0).toUpperCase()}${selectedService.slice(1)}`
+    : '';
 
   // Service URLs for redirect
   const serviceUrls = {
     amazon: "https://www.amazon.com/gift-cards/",
     apple: "https://www.apple.com/uk/shop/gift-cards",
-    airbnb: "https://www.airbnb.com/giftcards"
+    airbnb: "https://www.airbnb.com/giftcards",
+  stripe: "https://buy.stripe.com/test_28o4ig0SY9Xq8co3cc"
   };
 
   // Auto-fill Token ID if provided from MyCards
   useEffect(() => {
     if (selectedTokenId && selectedTokenId !== cardInput) {
       setCardInput(selectedTokenId);
-      // Clear the selectedTokenId after using it
-      onClearTokenId();
     }
-  }, [selectedTokenId, cardInput, onClearTokenId]);
+  }, [selectedTokenId, cardInput]);
 
   // Auto-lookup when cardInput changes and is not empty
   useEffect(() => {
     if (cardInput && cardInput.trim() !== '' && isConnected) {
       handleCardLookup();
     }
-  }, [cardInput, isConnected]);
+  }, [cardInput, isConnected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const lookupCard = async (tokenId: string): Promise<RedeemableCard | null> => {
     if (!isConnected || !address) {
@@ -78,7 +98,7 @@ export function SpendCard({ selectedTokenId = '', onClearTokenId }: SpendCardPro
     try {
       // Initialize web3 service
       const walletClient = createWalletClient({
-        chain: base,
+        chain: baseChain,
         transport: custom(window.ethereum)
       });
 
@@ -103,7 +123,12 @@ export function SpendCard({ selectedTokenId = '', onClearTokenId }: SpendCardPro
 
       // Format amount properly 
       const formattedAmount = (Number(giftCardInfo.amount) / 1000000).toString();
-      const tokenSymbol = giftCardInfo.token.toLowerCase() === USDC_ADDRESS.toLowerCase() ? 'USDC' : 'USDT';
+      
+      // Determine token symbol from address
+      const tokenAddress = giftCardInfo.token.toLowerCase();
+      const tokenSymbol: 'USDC' | 'USDT' = 
+        tokenAddress === USDC_ADDRESS.toLowerCase() ? 'USDC' :
+        tokenAddress === USDT_ADDRESS.toLowerCase() ? 'USDT' : 'USDT';
 
       // Format creator address (show first 6 and last 4 characters)
       const formattedCreator = creator ? `${creator.slice(0, 6)}...${creator.slice(-4)}` : 'Unknown';
@@ -182,17 +207,57 @@ export function SpendCard({ selectedTokenId = '', onClearTokenId }: SpendCardPro
       return;
     }
 
+    if (selectedService === 'stripe' && currentCard.currency !== 'USDC') {
+      setError('Stripe only supports USDC. Please use a USDC gift card.');
+      return;
+    }
+
     try {
       // Initialize web3 service
       const walletClient = createWalletClient({
-        chain: base,
+        chain: baseChain,
         transport: custom(window.ethereum)
       });
 
       await web3Service.initialize(walletClient, address);
 
+      // Check current card status before redeem
+      // This prevents attempting to redeem an already used card
+      const giftCardInfo = await web3Service.getGiftCardInfo(currentCard.tokenId);
+      
+      if (!giftCardInfo) {
+        setError('Gift card not found. It may have been removed.');
+        return;
+      }
+
+      // Check that the card has not been redeemed yet
+      if (giftCardInfo.redeemed) {
+        setError('This gift card has already been redeemed and cannot be used again.');
+        // Update card state to reflect current status
+        setCurrentCard(prev => prev ? { ...prev, status: 'redeemed' } : null);
+        setRedeemStep('input');
+        return;
+      }
+
+      // Check that user is still the owner of the card
+      const owner = await web3Service.getCardOwner(currentCard.tokenId);
+      if (owner.toLowerCase() !== address.toLowerCase()) {
+        setError('You are no longer the owner of this gift card.');
+        setCurrentCard(null);
+        setRedeemStep('input');
+        return;
+      }
+
       // Redeem gift card on blockchain
       await web3Service.redeemGiftCard(currentCard.tokenId);
+      
+      // Update Supabase cache
+      try {
+        await GiftCardsService.updateCardRedeemedStatus(currentCard.tokenId, true);
+        console.log('Card redeemed status updated in Supabase');
+      } catch (error) {
+        console.error('Error updating card status in Supabase:', error);
+      }
       
       setRedeemStep('success');
       toast.success(`Gift card redeemed successfully for ${selectedService.charAt(0).toUpperCase() + selectedService.slice(1)}!`);
@@ -200,13 +265,13 @@ export function SpendCard({ selectedTokenId = '', onClearTokenId }: SpendCardPro
       // Update card status
       setCurrentCard(prev => prev ? { ...prev, status: 'redeemed' } : null);
       
-      // Redirect to service page after 2 seconds
-      setTimeout(() => {
-        if (selectedService && serviceUrls[selectedService as keyof typeof serviceUrls]) {
+      // Redirect user to selected service (if there is a link)
+      if (selectedService && serviceUrls[selectedService as keyof typeof serviceUrls]) {
+        setTimeout(() => {
           window.open(serviceUrls[selectedService as keyof typeof serviceUrls], '_blank');
-        }
-      }, 2000);
-      
+        }, 2000);
+      }
+
 
     } catch (error) {
       console.error('Error redeeming card:', error);
@@ -254,8 +319,12 @@ export function SpendCard({ selectedTokenId = '', onClearTokenId }: SpendCardPro
 
       <Tabs defaultValue="manual" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="manual">Enter manually</TabsTrigger>
-          <TabsTrigger value="scan">Scan QR code</TabsTrigger>
+          <TabsTrigger value="manual" className="border border-strong">
+            Enter manually
+          </TabsTrigger>
+          <TabsTrigger value="scan" disabled className="border border-strong">
+            Scan QR code
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="manual" className="space-y-4">
@@ -270,7 +339,7 @@ export function SpendCard({ selectedTokenId = '', onClearTokenId }: SpendCardPro
                   onChange={(e) => setCardInput(e.target.value)}
                 />
               </div>
-              <Button onClick={handleCardLookup} className="w-full">
+              <Button onClick={handleCardLookup} className="w-full border border-strong">
                 Look up card
               </Button>
             </div>
@@ -348,75 +417,182 @@ export function SpendCard({ selectedTokenId = '', onClearTokenId }: SpendCardPro
               </Card>
 
               {/* Service Selection */}
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <h4 className="text-sm font-medium text-gray-700 text-center">Choose where to spend your gift card:</h4>
-                <div className="flex justify-center gap-4">
-                  {/* Airbnb */}
-                  <div 
-                    className={`flex flex-col items-center cursor-pointer transition-all duration-200 ${
-                      selectedService === 'airbnb' ? 'scale-110' : 'hover:scale-105'
-                    }`}
-                    onClick={() => setSelectedService('airbnb')}
-                  >
-                    <div className={`w-16 h-16 rounded-lg overflow-hidden shadow-sm mb-2 border-2 transition-all duration-200 ${
-                      selectedService === 'airbnb' ? 'border-blue-500 shadow-lg' : 'border-gray-200 hover:border-blue-300'
-                    }`}>
-                      <img 
-                        src="/airbnb.jpg" 
-                        alt="Airbnb" 
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <span className={`text-xs font-medium transition-colors ${
-                      selectedService === 'airbnb' ? 'text-blue-600' : 'text-gray-600'
-                    }`}>
-                      Airbnb
-                    </span>
-                  </div>
 
-                  {/* Amazon */}
-                  <div 
-                    className={`flex flex-col items-center cursor-pointer transition-all duration-200 ${
-                      selectedService === 'amazon' ? 'scale-110' : 'hover:scale-105'
-                    }`}
-                    onClick={() => setSelectedService('amazon')}
+                <div className="flex flex-wrap justify-center gap-4">
+                  <Popover
+                    open={isTechGiantsOpen}
+                    onOpenChange={(open) => {
+                      setIsTechGiantsOpen(open);
+                    }}
                   >
-                    <div className={`w-16 h-16 rounded-lg overflow-hidden shadow-sm mb-2 border-2 transition-all duration-200 ${
-                      selectedService === 'amazon' ? 'border-orange-500 shadow-lg' : 'border-gray-200 hover:border-orange-300'
-                    }`}>
-                      <img 
-                        src="/amazon.jpg" 
-                        alt="Amazon" 
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <span className={`text-xs font-medium transition-colors ${
-                      selectedService === 'amazon' ? 'text-orange-600' : 'text-gray-600'
-                    }`}>
-                      Amazon
-                    </span>
-                  </div>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className={`flex flex-col items-center transition-all duration-200 focus:outline-none ${
+                          isTechGiantsSelected ? 'scale-110' : 'hover:scale-105'
+                        }`}
+                        aria-label="Open Tech Giants options"
+                      >
+                        <div
+                          className={`w-16 h-16 rounded-lg overflow-hidden shadow-sm mb-2 border-2 transition-all duration-200 ${
+                            isTechGiantsSelected
+                              ? 'border-sky-500 shadow-lg'
+                              : 'border-gray-200 hover:border-sky-300'
+                          }`}
+                        >
+                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-sky-500 to-blue-600">
+                            <span className="text-xs font-semibold text-white">Tech</span>
+                          </div>
+                        </div>
+                        <span
+                          className={`text-xs font-medium transition-colors ${
+                            isTechGiantsSelected ? 'text-sky-600' : 'text-gray-600'
+                          }`}
+                        >
+                          Services
+                        </span>
+                      </button>
+                    </PopoverTrigger>
 
-                  {/* Apple */}
+                    <PopoverContent className="w-80 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">Tech Giants</span>
+                        <ChevronDown
+                          className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${
+                            isTechGiantsOpen ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </div>
+                      <div className="grid grid-cols-3 gap-4">
+                        {/* Airbnb */}
+                        <button
+                          type="button"
+                          className={`flex flex-col items-center transition-all duration-200 focus:outline-none ${
+                            selectedService === 'airbnb' ? 'scale-110' : 'hover:scale-105'
+                          }`}
+                          onClick={() => {
+                            setSelectedService('airbnb');
+                            setIsTechGiantsOpen(false);
+                          }}
+                        >
+                          <div
+                            className={`w-16 h-16 rounded-lg overflow-hidden shadow-sm mb-2 border-2 transition-all duration-200 ${
+                              selectedService === 'airbnb'
+                                ? 'border-blue-500 shadow-lg'
+                                : 'border-gray-200 hover:border-blue-300'
+                            }`}
+                          >
+                            <img
+                              src="/airbnb.jpg"
+                              alt="Airbnb"
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                          <span
+                            className={`text-xs font-medium transition-colors ${
+                              selectedService === 'airbnb' ? 'text-blue-600' : 'text-gray-600'
+                            }`}
+                          >
+                            Airbnb
+                          </span>
+                        </button>
+
+                        {/* Amazon */}
+                        <button
+                          type="button"
+                          className={`flex flex-col items-center transition-all duration-200 focus:outline-none ${
+                            selectedService === 'amazon' ? 'scale-110' : 'hover:scale-105'
+                          }`}
+                          onClick={() => {
+                            setSelectedService('amazon');
+                            setIsTechGiantsOpen(false);
+                          }}
+                        >
+                          <div
+                            className={`w-16 h-16 rounded-lg overflow-hidden shadow-sm mb-2 border-2 transition-all duration-200 ${
+                              selectedService === 'amazon'
+                                ? 'border-orange-500 shadow-lg'
+                                : 'border-gray-200 hover:border-orange-300'
+                            }`}
+                          >
+                            <img
+                              src="/amazon.jpg"
+                              alt="Amazon"
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                          <span
+                            className={`text-xs font-medium transition-colors ${
+                              selectedService === 'amazon' ? 'text-orange-600' : 'text-gray-600'
+                            }`}
+                          >
+                            Amazon
+                          </span>
+                        </button>
+
+                        {/* Apple */}
+                        <button
+                          type="button"
+                          className={`flex flex-col items-center transition-all duration-200 focus:outline-none ${
+                            selectedService === 'apple' ? 'scale-110' : 'hover:scale-105'
+                          }`}
+                          onClick={() => {
+                            setSelectedService('apple');
+                            setIsTechGiantsOpen(false);
+                          }}
+                        >
+                          <div
+                            className={`w-16 h-16 rounded-lg overflow-hidden shadow-sm mb-2 border-2 transition-all duration-200 ${
+                              selectedService === 'apple'
+                                ? 'border-gray-500 shadow-lg'
+                                : 'border-gray-200 hover:border-gray-400'
+                            }`}
+                          >
+                            <img
+                              src="/apple.jpg"
+                              alt="Apple"
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                          <span
+                            className={`text-xs font-medium transition-colors ${
+                              selectedService === 'apple' ? 'text-gray-800' : 'text-gray-600'
+                            }`}
+                          >
+                            Apple
+                          </span>
+                        </button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+
+                  {/* Stripe */}
                   <div 
                     className={`flex flex-col items-center cursor-pointer transition-all duration-200 ${
-                      selectedService === 'apple' ? 'scale-110' : 'hover:scale-105'
+                      selectedService === 'stripe' ? 'scale-110' : 'hover:scale-105'
                     }`}
-                    onClick={() => setSelectedService('apple')}
+                    onClick={() => setSelectedService('stripe')}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        setSelectedService('stripe');
+                      }
+                    }}
                   >
                     <div className={`w-16 h-16 rounded-lg overflow-hidden shadow-sm mb-2 border-2 transition-all duration-200 ${
-                      selectedService === 'apple' ? 'border-gray-500 shadow-lg' : 'border-gray-200 hover:border-gray-400'
+                      selectedService === 'stripe' ? 'border-purple-500 shadow-lg' : 'border-gray-200 hover:border-purple-300'
                     }`}>
-                      <img 
-                        src="/apple.jpg" 
-                        alt="Apple" 
-                        className="w-full h-full object-cover"
-                      />
+                      <div className="w-full h-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center">
+                        <span className="text-white font-bold text-xs">Stripe</span>
+                      </div>
                     </div>
                     <span className={`text-xs font-medium transition-colors ${
-                      selectedService === 'apple' ? 'text-gray-800' : 'text-gray-600'
+                      selectedService === 'stripe' ? 'text-purple-600' : 'text-gray-600'
                     }`}>
-                      Apple
+                      Stripe
                     </span>
                   </div>
                 </div>
@@ -429,7 +605,7 @@ export function SpendCard({ selectedTokenId = '', onClearTokenId }: SpendCardPro
                 disabled={!selectedService}
               >
                 {selectedService 
-                  ? `Redeem for ${selectedService.charAt(0).toUpperCase() + selectedService.slice(1)}` 
+                  ? `Redeem for ${selectedServiceLabel}` 
                   : 'Select a service first'
                 }
               </Button>
@@ -445,14 +621,46 @@ export function SpendCard({ selectedTokenId = '', onClearTokenId }: SpendCardPro
                 </AlertDescription>
               </Alert>
 
-              {selectedService && (
-                <Alert className="border-blue-200 bg-blue-50">
-                  <AlertCircle className="h-4 w-4 text-blue-600" />
-                  <AlertDescription className="text-blue-800">
-                    Redirecting to {selectedService.charAt(0).toUpperCase() + selectedService.slice(1)} in a few seconds...
-                  </AlertDescription>
-                </Alert>
-              )}
+              {selectedService === 'stripe' && currentCard.currency === 'USDC' ? (
+                <>
+                   <Alert className="border-green-200 bg-green-50">
+                     <CheckCircle className="h-4 w-4 text-green-600" />
+                     <AlertDescription className="text-green-800">
+                       Funds are ready for Stripe checkout.
+                     </AlertDescription>
+                   </Alert>
+                  <Button 
+                    onClick={() => window.open(serviceUrls.stripe, '_blank')} 
+                    className="w-full" 
+                    size="lg"
+                  >
+                    Pay with Stripe
+                  </Button>
+                </>
+              ) : selectedService && serviceUrls[selectedService as keyof typeof serviceUrls] ? (
+                <>
+                {/* <Alert className="border-blue-200 bg-blue-50">
+                    <AlertCircle className="h-4 w-4 text-blue-600" />
+                    <AlertDescription className="text-blue-800">
+                      Redirecting to {selectedService.charAt(0).toUpperCase() + selectedService.slice(1)} in a few seconds...
+                    </AlertDescription>
+                  </Alert> */}
+                  <Alert className="border-amber-200 bg-amber-50">
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-amber-800">
+                      If the redirect doesn't happen, please follow this link manually:{" "}
+                      <a 
+                        href={serviceUrls[selectedService as keyof typeof serviceUrls]} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="underline font-medium hover:text-amber-900"
+                      >
+                        {serviceUrls[selectedService as keyof typeof serviceUrls]}
+                      </a>
+                    </AlertDescription>
+                  </Alert>
+                </>
+              ) : null}
 
               {currentCard.secretMessage && (
                 <Card>

@@ -8,7 +8,7 @@ export function BaseLogo({ className = "h-6 w-auto" }: { className?: string }) {
     >
       <defs>
         <style>
-          {`.cls-1 { fill: #0052ff; }`}
+          {`.cls-1 { fill: #0000ff; }`}
         </style>
       </defs>
       {/* Base text - white */}

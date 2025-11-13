@@ -52,11 +52,69 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        gray: {
+          50: "#EEF0F3",
+          100: "#DEE1E7",
+          200: "#DEE1E7",
+          300: "#B1B7C3",
+          400: "#B1B7C3",
+          500: "#717886",
+          600: "#5B616E",
+          700: "#32353D",
+          800: "#32353D",
+          900: "#0A0B0D",
+          950: "#0A0B0D",
+        },
+        blue: {
+          400: "#0000FF",
+          500: "#0000FF",
+          600: "#0000FF",
+        },
+        sky: {
+          500: "#3C8AFF",
+          600: "#3C8AFF",
+        },
+        purple: {
+          500: "#3C8AFF",
+          600: "#3C8AFF",
+        },
+        yellow: {
+          500: "#FFD12F",
+          600: "#FFD12F",
+        },
+        orange: {
+          500: "#FFD12F",
+          600: "#FFD12F",
+        },
+        green: {
+          500: "#66C800",
+          600: "#66C800",
+        },
+        lime: {
+          500: "#B6F569",
+          600: "#B6F569",
+        },
+        red: {
+          500: "#FC401F",
+          600: "#FC401F",
+        },
+        pink: {
+          500: "#FEA8CD",
+          600: "#FEA8CD",
+        },
       },
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        lg: "16px",
+        md: "12px",
+        sm: "8px",
+        xl: "20px",
+      },
+      backgroundImage: {
+        'circle-gradient': 'linear-gradient(180deg, hsl(var(--secondary)) 0%, hsl(var(--secondary)) 100%)',
+      },
+      boxShadow: {
+        'circle-card': '0 4px 12px rgba(10, 11, 13, 0.08)',
+        'circle-dropdown': '0 2px 8px rgba(10, 11, 13, 0.12)',
       },
       keyframes: {
         "accordion-down": {

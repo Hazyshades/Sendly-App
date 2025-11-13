@@ -141,3 +141,8 @@ export class PinataService {
 }
 
 export default new PinataService();
+
+
+
+
+

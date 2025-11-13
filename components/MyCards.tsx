@@ -1,17 +1,21 @@
 import { useState, useEffect } from 'react';
-import { Gift, Copy, Share2, MoreVertical, Eye, Clock, CheckCircle, XCircle } from 'lucide-react';
-import { Button } from './ui/button';
+import { Gift, Eye, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from './ui/empty';
+import { Spinner } from './ui/spinner';
+import { Skeleton } from './ui/skeleton';
 import { toast } from 'sonner';
 import { useAccount } from 'wagmi';
 import { createWalletClient, custom } from 'viem';
-import { base } from 'viem/chains';
+import { baseChain } from '../utils/web3/wagmiConfig';
 import web3Service from '../utils/web3/web3Service';
+import { ClaimCards } from './ClaimCards';
+import { usePrivy } from '@privy-io/react-auth';
+import { GiftCardsService, type GiftCardInsert } from '../utils/supabase/giftCards';
 
 interface GiftCard {
   tokenId: string;
@@ -36,11 +40,15 @@ interface MyCardsProps {
 
 export function MyCards({ onSpendCard }: MyCardsProps) {
   const { address, isConnected } = useAccount();
+  const { authenticated, user } = usePrivy();
+  const telegramAccount = (user as any)?.telegram;
+  const telegramUsername = ((telegramAccount?.username || telegramAccount?.telegramUserId || telegramAccount?.id || '') as string).replace(/^@/, '').trim();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterCurrency, setFilterCurrency] = useState('all');
   const [sentCards, setSentCards] = useState<GiftCard[]>([]);
   const [receivedCards, setReceivedCards] = useState<GiftCard[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [hasFetched, setHasFetched] = useState(false);
 
@@ -64,7 +72,73 @@ export function MyCards({ onSpendCard }: MyCardsProps) {
     }
   };
 
-    useEffect(() => {
+  const fetchPendingCardsCount = async () => {
+    if (!authenticated || !isConnected || !address) {
+      setPendingCount(0);
+      return;
+    }
+
+    const hasTwitter = user?.twitter?.username;
+    const hasTwitch = user?.twitch?.username;
+    const hasTelegram = telegramUsername;
+
+    if (!hasTwitter && !hasTwitch && !hasTelegram) {
+      setPendingCount(0);
+      return;
+    }
+
+    try {
+      const walletClient = createWalletClient({
+        chain: baseChain,
+        transport: custom(window.ethereum)
+      });
+      await web3Service.initialize(walletClient, address);
+      
+      let totalCount = 0;
+
+      if (hasTwitter) {
+        try {
+          const twitterUsername = user!.twitter!.username;
+          if (twitterUsername) {
+            const tokenIds = await web3Service.getPendingTwitterCards(twitterUsername);
+            totalCount += tokenIds.length;
+          }
+        } catch (error) {
+          console.error('Error fetching Twitter pending cards count:', error);
+        }
+      }
+
+      if (hasTwitch) {
+        try {
+          const twitchUsername = user!.twitch!.username;
+          if (twitchUsername) {
+            const tokenIds = await web3Service.getPendingTwitchCards(twitchUsername);
+            totalCount += tokenIds.length;
+          }
+        } catch (error) {
+          console.error('Error fetching Twitch pending cards count:', error);
+        }
+      }
+
+      if (hasTelegram) {
+        try {
+          if (telegramUsername) {
+            const tokenIds = await web3Service.getPendingTelegramCards(telegramUsername);
+            totalCount += tokenIds.length;
+          }
+        } catch (error) {
+          console.error('Error fetching Telegram pending cards count:', error);
+        }
+      }
+
+      setPendingCount(totalCount);
+    } catch (error) {
+      console.error('Error fetching pending cards count:', error);
+      setPendingCount(0);
+    }
+  };
+
+  useEffect(() => {
     if (isConnected && address && !hasFetched) {
       setHasFetched(true);
       fetchCards();
@@ -74,7 +148,318 @@ export function MyCards({ onSpendCard }: MyCardsProps) {
     }
   }, [isConnected, address, hasFetched]);
 
+  useEffect(() => {
+    if (authenticated && isConnected && address) {
+      fetchPendingCardsCount();
+    } else {
+      setPendingCount(0);
+    }
+  }, [authenticated, user?.twitter?.username, user?.twitch?.username, telegramUsername, isConnected, address]);
+
   const fetchCards = async () => {
+    if (!isConnected || !address) return;
+
+    try {
+      // First, try to load from Supabase cache (fast) - display immediately
+      console.log('Loading cards from Supabase cache...');
+      const [supabaseReceivedCards, supabaseSentCards] = await Promise.all([
+        GiftCardsService.getCardsByRecipientAddress(address),
+        GiftCardsService.getCardsBySender(address)
+      ]);
+
+      // Transform Supabase data to our format
+      const transformedReceivedCards: GiftCard[] = supabaseReceivedCards.map(card => ({
+        tokenId: card.token_id,
+        amount: card.amount,
+        currency: card.currency,
+        design: 'pink',
+        message: card.message,
+        recipient: address,
+        sender: card.sender_address,
+        status: card.redeemed ? 'redeemed' : 'active',
+        createdAt: card.created_at ? new Date(card.created_at).toLocaleDateString() : new Date().toLocaleDateString(),
+        hasTimer: false,
+        hasPassword: false,
+        qrCode: `sendly://redeem/${card.token_id}`
+      }));
+
+      const transformedSentCards: GiftCard[] = supabaseSentCards.map(card => {
+        const username = card.recipient_username ? card.recipient_username.replace(/^@/, '') : null;
+        const recipientDisplay = (() => {
+          switch (card.recipient_type) {
+            case 'twitter':
+              return username ? `@${username}` : 'Twitter user';
+            case 'telegram':
+              return username ? `@${username} (Telegram)` : 'Telegram user';
+            case 'twitch':
+              return username ? `${username} (Twitch)` : 'Twitch user';
+            default:
+              return card.recipient_address || 'Unknown';
+          }
+        })();
+
+        return {
+          tokenId: card.token_id,
+          amount: card.amount,
+          currency: card.currency,
+          design: 'pink',
+          message: card.message,
+          recipient: recipientDisplay,
+          sender: address,
+          status: card.redeemed ? 'redeemed' : 'active',
+          createdAt: card.created_at ? new Date(card.created_at).toLocaleDateString() : new Date().toLocaleDateString(),
+          hasTimer: false,
+          hasPassword: false,
+          qrCode: `sendly://redeem/${card.token_id}`
+        };
+      });
+
+      // Update UI with cached data immediately - don't wait for blockchain!
+      setReceivedCards(transformedReceivedCards);
+      setSentCards(transformedSentCards);
+      setLoading(false);
+
+      // Then sync with blockchain in the background (slow, but non-blocking)
+      // Start sync without await to avoid blocking UI
+      console.log('Starting blockchain sync in background...');
+      syncWithBlockchain(address).catch(error => {
+        console.error('Background sync error (non-critical):', error);
+      });
+    } catch (error) {
+      console.error('Error fetching cards from Supabase:', error);
+      // Fallback to blockchain if Supabase fails
+      await fetchCardsFromBlockchain();
+    }
+  };
+
+  const syncWithBlockchain = async (userAddress: string) => {
+    try {
+      
+      // Initialize web3 service
+      const walletClient = createWalletClient({
+        chain: baseChain,
+        transport: custom(window.ethereum)
+      });
+
+      await web3Service.initialize(walletClient, userAddress);
+      
+      // Load gift cards from blockchain
+      console.log('Loading received cards from blockchain...');
+      const blockchainCards = await web3Service.loadGiftCards(false);
+      
+      // Load sent cards
+      console.log('Loading sent cards from blockchain...');
+      const sentBlockchainCards = await web3Service.loadSentGiftCards(false);
+      console.log(`Synced ${blockchainCards.length} received and ${sentBlockchainCards.length} sent cards from blockchain`);
+      
+      // Also check cards with NULL recipient_address in Supabase
+      // and update their owners from blockchain
+      console.log('Checking cards with null recipient_address...');
+      const cardsWithNullRecipient = await GiftCardsService.getAllCardsWithNullRecipient();
+      console.log(`Found ${cardsWithNullRecipient.length} cards with null recipient_address`);
+      
+      // Check owners for cards with NULL recipient_address
+      const cardsToUpdate: GiftCardInsert[] = [];
+      const maxConcurrentChecks = 5; // Limit concurrent requests
+      
+      for (let i = 0; i < cardsWithNullRecipient.length; i += maxConcurrentChecks) {
+        const batch = cardsWithNullRecipient.slice(i, i + maxConcurrentChecks);
+        const ownerChecks = await Promise.all(
+          batch.map(async (card) => {
+            try {
+              const owner = await web3Service.getCardOwner(card.token_id);
+              // If card belongs to current user, update recipient_address
+              if (owner.toLowerCase() === userAddress.toLowerCase()) {
+                return {
+                  token_id: card.token_id,
+                  sender_address: card.sender_address,
+                  recipient_address: userAddress.toLowerCase(),
+                  recipient_username: null,
+                  recipient_type: 'address' as const,
+                  amount: card.amount,
+                  currency: card.currency,
+                  message: card.message,
+                  redeemed: card.redeemed,
+                };
+              }
+              return null;
+            } catch (error) {
+              console.warn(`Failed to check owner for card ${card.token_id}:`, error);
+              return null;
+            }
+          })
+        );
+        
+        cardsToUpdate.push(...ownerChecks.filter(card => card !== null) as GiftCardInsert[]);
+      }
+      
+      if (cardsToUpdate.length > 0) {
+        console.log(`Updating ${cardsToUpdate.length} cards with owner information`);
+      }
+      
+      // Transform and update Supabase cache
+      // Use Map for deduplication by token_id (keep latest version)
+      const cardsMap = new Map<string, GiftCardInsert>();
+      
+      // Add received cards from blockchain
+      blockchainCards.forEach(card => {
+        cardsMap.set(card.tokenId, {
+          token_id: card.tokenId,
+          sender_address: card.sender.toLowerCase(),
+          recipient_address: card.recipient.toLowerCase(),
+          recipient_username: null,
+          recipient_type: 'address' as const,
+          amount: card.amount,
+          currency: card.token,
+          message: card.message,
+          redeemed: card.redeemed,
+        });
+      });
+      
+      // Add sent cards (overwrite if duplicates exist)
+      sentBlockchainCards.forEach(card => {
+        const rawRecipient = card.recipient || '';
+        const lowercaseRecipient = rawRecipient.toLowerCase();
+        let recipientAddress: string | null = null;
+        let recipientUsername: string | null = null;
+        let recipientType: 'address' | 'twitter' | 'twitch' | 'telegram' = 'address';
+
+        if (lowercaseRecipient.startsWith('0x')) {
+          recipientAddress = rawRecipient.toLowerCase();
+        } else if (lowercaseRecipient.startsWith('telegram:')) {
+          recipientType = 'telegram';
+          recipientUsername = rawRecipient.slice('telegram:'.length).replace(/^@/, '').trim();
+        } else if (lowercaseRecipient.startsWith('twitter:') || rawRecipient.startsWith('@')) {
+          recipientType = 'twitter';
+          const usernamePart = lowercaseRecipient.startsWith('twitter:')
+            ? rawRecipient.slice('twitter:'.length)
+            : rawRecipient;
+          recipientUsername = usernamePart.replace(/^@/, '').trim();
+        } else if (lowercaseRecipient.length > 0) {
+          recipientType = 'twitch';
+          const usernamePart = lowercaseRecipient.startsWith('twitch:')
+            ? rawRecipient.slice('twitch:'.length)
+            : rawRecipient;
+          recipientUsername = usernamePart.replace(/^@/, '').trim();
+        }
+
+        cardsMap.set(card.tokenId, {
+          token_id: card.tokenId,
+          sender_address: userAddress.toLowerCase(),
+          recipient_address: recipientAddress,
+          recipient_username: recipientUsername,
+          recipient_type: recipientType,
+          amount: card.amount,
+          currency: card.token,
+          message: card.message,
+          redeemed: card.redeemed,
+        });
+      });
+      
+      // Add updated cards (overwrite if duplicates exist)
+      cardsToUpdate.forEach(card => {
+        cardsMap.set(card.token_id, card);
+      });
+      
+      // Convert Map to array (already without duplicates)
+      const cardsToCache = Array.from(cardsMap.values());
+      
+      console.log(`Sending ${cardsToCache.length} unique cards to Supabase (removed duplicates)`);
+
+      // Update Supabase cache
+      await GiftCardsService.bulkUpsertCards(cardsToCache);
+      console.log('Cache updated with blockchain data');
+
+      // Update UI only if new cards found or statuses changed
+      // Use functional update to access current values
+      setReceivedCards(currentReceivedCards => {
+        const existingReceivedMap = new Map(currentReceivedCards.map(card => [card.tokenId, card]));
+
+        // Transform received cards
+        const transformedReceivedCards: GiftCard[] = blockchainCards.map(card => ({
+          tokenId: card.tokenId,
+          amount: card.amount,
+          currency: card.token,
+          design: 'pink',
+          message: card.message,
+          recipient: card.recipient,
+          sender: card.sender,
+          status: card.redeemed ? 'redeemed' : 'active',
+          createdAt: existingReceivedMap.get(card.tokenId)?.createdAt || new Date().toLocaleDateString(),
+          hasTimer: false,
+          hasPassword: false,
+          qrCode: `sendly://redeem/${card.tokenId}`
+        }));
+
+        // Update only if there are changes (new cards or status changed)
+        const receivedChanged = currentReceivedCards.length !== transformedReceivedCards.length ||
+          currentReceivedCards.some(card => {
+            const newCard = transformedReceivedCards.find(c => c.tokenId === card.tokenId);
+            return newCard && newCard.status !== card.status;
+          });
+
+        return receivedChanged ? transformedReceivedCards : currentReceivedCards;
+      });
+
+      setSentCards(currentSentCards => {
+        const existingSentMap = new Map(currentSentCards.map(card => [card.tokenId, card]));
+
+        // Transform sent cards
+        const transformedSentCards: GiftCard[] = sentBlockchainCards.map(card => {
+          const rawRecipient = card.recipient || '';
+          const lowercaseRecipient = rawRecipient.toLowerCase();
+          let recipientDisplay = rawRecipient;
+
+          if (lowercaseRecipient.startsWith('telegram:')) {
+            const username = rawRecipient.slice('telegram:'.length).replace(/^@/, '').trim();
+            recipientDisplay = username ? `@${username} (Telegram)` : 'Telegram user';
+          } else if (lowercaseRecipient.startsWith('twitter:')) {
+            const username = rawRecipient.slice('twitter:'.length).replace(/^@/, '').trim();
+            recipientDisplay = username ? `@${username}` : 'Twitter user';
+          } else if (rawRecipient.startsWith('@')) {
+            recipientDisplay = rawRecipient;
+          } else if (lowercaseRecipient.startsWith('twitch:')) {
+            const username = rawRecipient.slice('twitch:'.length).trim();
+            recipientDisplay = username ? `${username} (Twitch)` : 'Twitch user';
+          } else if (!lowercaseRecipient.startsWith('0x') && lowercaseRecipient.length > 0) {
+            recipientDisplay = `${rawRecipient} (Twitch)`;
+          }
+
+          return {
+            tokenId: card.tokenId,
+            amount: card.amount,
+            currency: card.token,
+            design: 'pink',
+            message: card.message,
+            recipient: recipientDisplay,
+            sender: userAddress,
+            status: card.redeemed ? 'redeemed' : 'active',
+            createdAt: existingSentMap.get(card.tokenId)?.createdAt || new Date().toLocaleDateString(),
+            hasTimer: false,
+            hasPassword: false,
+            qrCode: `sendly://redeem/${card.tokenId}`
+          };
+        });
+
+        // Update only if there are changes (new cards or status changed)
+        const sentChanged = currentSentCards.length !== transformedSentCards.length ||
+          currentSentCards.some(card => {
+            const newCard = transformedSentCards.find(c => c.tokenId === card.tokenId);
+            return newCard && newCard.status !== card.status;
+          });
+
+        return sentChanged ? transformedSentCards : currentSentCards;
+      });
+      
+      console.log('Blockchain sync completed');
+    } catch (error) {
+      console.error('Error syncing with blockchain:', error);
+      // Don't show error to user - they already have data from Supabase
+    } finally {
+    }
+  };
+
+  const fetchCardsFromBlockchain = async () => {
     if (!isConnected || !address) return;
 
     try {
@@ -82,41 +467,57 @@ export function MyCards({ onSpendCard }: MyCardsProps) {
       
       // Initialize web3 service
       const walletClient = createWalletClient({
-        chain: base,
+        chain: baseChain,
         transport: custom(window.ethereum)
       });
 
       await web3Service.initialize(walletClient, address);
       
       // Load gift cards from blockchain
-      const blockchainCards = await web3Service.loadGiftCards();
+      const blockchainCards = await web3Service.loadGiftCards(false);
       
-      // Transform blockchain data to our format
+      // Load sent cards
+      console.log('Fetching sent gift cards...');
+      const sentBlockchainCards = await web3Service.loadSentGiftCards(false);
+      console.log(`Received ${sentBlockchainCards.length} sent cards from blockchain`);
+      
+      // Transform blockchain data to our format for received cards
       const transformedCards: GiftCard[] = blockchainCards.map(card => ({
         tokenId: card.tokenId,
         amount: card.amount,
         currency: card.token,
-        design: 'pink', // Default design, could be extracted from metadata
+        design: 'pink',
         message: card.message,
         recipient: card.recipient,
-        sender: address, // For received cards, sender would be different
+        sender: card.sender,
         status: card.redeemed ? 'redeemed' : 'active',
-        createdAt: new Date().toLocaleDateString(), // Could be extracted from blockchain events
+        createdAt: new Date().toLocaleDateString(),
         hasTimer: false,
         hasPassword: false,
         qrCode: `sendly://redeem/${card.tokenId}`
       }));
 
-      // For now, all cards are treated as received cards
-      // In a real implementation, you'd need to track sent cards separately
-      // Only update if we got cards
-      if (transformedCards.length > 0) {
-        setReceivedCards(transformedCards);
-      }
-      setSentCards([]); // Would be populated from blockchain events
+      // Transform blockchain data to our format for sent cards
+      const transformedSentCards: GiftCard[] = sentBlockchainCards.map(card => ({
+        tokenId: card.tokenId,
+        amount: card.amount,
+        currency: card.token,
+        design: 'pink',
+        message: card.message,
+        recipient: card.recipient,
+        sender: address,
+        status: card.redeemed ? 'redeemed' : 'active',
+        createdAt: new Date().toLocaleDateString(),
+        hasTimer: false,
+        hasPassword: false,
+        qrCode: `sendly://redeem/${card.tokenId}`
+      }));
+
+      // Update card state
+      setReceivedCards(transformedCards);
+      setSentCards(transformedSentCards);
     } catch (error) {
       console.error('Error fetching cards:', error);
-      // Don't show error toast on rate limiting - just keep existing cards
       if (!(error as Error).message?.includes('rate limit') && !(error as Error).message?.includes('429')) {
         toast.error('Failed to load gift cards');
       }
@@ -125,36 +526,6 @@ export function MyCards({ onSpendCard }: MyCardsProps) {
     }
   };
 
-  const handleRevokeCard = async () => {
-    try {
-      // Note: Revoking is not implemented in the current smart contract
-      // This would require additional contract functionality
-      toast.info('Revoke functionality not implemented in current contract');
-    } catch (error) {
-      console.error('Error revoking card:', error);
-      toast.error('Failed to revoke gift card');
-    }
-  };
-
-  const handleCopyLink = (cardId: string) => {
-    const link = `${window.location.origin}/redeem/${cardId}`;
-    navigator.clipboard.writeText(link);
-    toast.success('Link copied to clipboard!');
-  };
-
-  const handleShareCard = (cardId: string) => {
-    const link = `${window.location.origin}/redeem/${cardId}`;
-    if (navigator.share) {
-      navigator.share({
-        title: 'Gift Card',
-        text: 'Check out this gift card!',
-        url: link
-      });
-    } else {
-      navigator.clipboard.writeText(link);
-      toast.success('Link copied to clipboard!');
-    }
-  };
 
   const filteredSentCards = sentCards.filter(card => {
     const matchesSearch = card.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -174,25 +545,36 @@ export function MyCards({ onSpendCard }: MyCardsProps) {
 
   if (!isConnected) {
     return (
-      <div className="p-6 text-center">
-        <div className="text-gray-500">
-          <Gift className="w-12 h-12 mx-auto mb-4 opacity-50" />
-          <p>Please connect your wallet to view your gift cards</p>
-              </div>
-            </div>
+      <div className="p-6">
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Gift className="w-12 h-12 opacity-50" />
+            </EmptyMedia>
+            <EmptyTitle>Connect your wallet</EmptyTitle>
+            <EmptyDescription>
+              Please connect your wallet to view your gift cards
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      </div>
     );
   }
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="animate-pulse space-y-4">
+      <div className="p-6 space-y-4">
+        <div className="flex items-center justify-center gap-2">
+          <Spinner className="w-6 h-6" />
+          <span className="text-gray-600">Loading gift cards...</span>
+        </div>
+        <div className="space-y-4">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
+            <Skeleton key={i} className="h-32 w-full" />
           ))}
         </div>
       </div>
-  );
+    );
   }
 
   return (
@@ -204,7 +586,7 @@ export function MyCards({ onSpendCard }: MyCardsProps) {
             placeholder="Search cards..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-64"
+            className="w-128"
           />
           <Select value={filterStatus} onValueChange={setFilterStatus}>
             <SelectTrigger className="w-32">
@@ -231,10 +613,34 @@ export function MyCards({ onSpendCard }: MyCardsProps) {
       </div>
       
       <Tabs defaultValue="received" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="sent">Sent ({sentCards.length})</TabsTrigger>
-          <TabsTrigger value="received">Received ({receivedCards.length})</TabsTrigger>
+        <TabsList className={`grid w-full ${authenticated ? 'grid-cols-3' : 'grid-cols-2'}`}>
+          <TabsTrigger value="sent" className="border border-strong">
+            Sent ({sentCards.length})
+          </TabsTrigger>
+          <TabsTrigger value="received" className="border border-strong">
+            Received ({receivedCards.length})
+          </TabsTrigger>
+          {authenticated && (
+            <TabsTrigger value="pending" className="border border-strong">
+              Pending Claims ({pendingCount})
+            </TabsTrigger>
+          )}
         </TabsList>
+        
+        {authenticated && (
+          <TabsContent value="pending" className="space-y-4">
+            <ClaimCards 
+              autoLoad={true}
+              onCardClaimed={() => {
+                if (isConnected && address) {
+                  fetchCards();
+                  fetchPendingCardsCount();
+                }
+              }}
+              onPendingCountChange={setPendingCount}
+            />
+          </TabsContent>
+        )}
         
         <TabsContent value="sent" className="space-y-4">
           {filteredSentCards.length === 0 ? (
@@ -266,29 +672,6 @@ export function MyCards({ onSpendCard }: MyCardsProps) {
                         {getStatusIcon(card.status)}
                         {card.status}
                       </Badge>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreVertical className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                          <DropdownMenuItem onClick={() => handleCopyLink(card.tokenId)}>
-                            <Copy className="w-4 h-4 mr-2" />
-                            Copy Link
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleShareCard(card.tokenId)}>
-                            <Share2 className="w-4 h-4 mr-2" />
-                            Share
-                          </DropdownMenuItem>
-                          {card.status === 'active' && (
-                            <DropdownMenuItem onClick={() => handleRevokeCard()}>
-                              <XCircle className="w-4 h-4 mr-2" />
-                              Revoke
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
                     </div>
                   </div>
                 </CardHeader>
@@ -352,23 +735,6 @@ export function MyCards({ onSpendCard }: MyCardsProps) {
                         {getStatusIcon(card.status)}
                         {card.status}
                       </Badge>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreVertical className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                          <DropdownMenuItem onClick={() => handleCopyLink(card.tokenId)}>
-                            <Copy className="w-4 h-4 mr-2" />
-                            Copy Link
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleShareCard(card.tokenId)}>
-                            <Share2 className="w-4 h-4 mr-2" />
-                            Share
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
                     </div>
                   </div>
                 </CardHeader>

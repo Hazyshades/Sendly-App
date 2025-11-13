@@ -1,25 +1,40 @@
-import { useState } from 'react';
-import { Gift, QrCode, Share2, Clock, Lock, Upload, Palette, CheckCircle, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Gift, QrCode, Share2, Clock, Lock, Upload, Palette, CheckCircle, AlertCircle, Mail, MessageCircle, Copy, ChevronDown } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+ 
 import { Switch } from './ui/switch';
+import { Checkbox } from './ui/checkbox';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { Slider } from './ui/slider';
 import { Alert, AlertDescription } from './ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
+import { RadioGroup, RadioGroupItem } from './ui/radio-group';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from './ui/collapsible';
 import { toast } from 'sonner';
-import { useAccount } from 'wagmi';
-import { createWalletClient, custom } from 'viem';
-import { base } from 'viem/chains';
+import { useAccount, useWalletClient } from 'wagmi';
+import { createWalletClient, custom, isAddress } from 'viem';
+import { base as baseChainViem, mainnet } from 'viem/chains';
+import { getAddress as resolveOnchainName, isBasename } from '@coinbase/onchainkit/identity';
+import { baseChain } from '../utils/web3/wagmiConfig';
 import web3Service from '../utils/web3/web3Service';
-import pinataService from '../utils/pinataService';
+import pinataService from '../utils/pinata';
 import imageGenerator from '../utils/imageGenerator';
+import { createTwitterCardMapping } from '../utils/twitter';
+import { createTwitchCardMapping } from '../utils/twitch';
+import { createTelegramCardMapping } from '../utils/telegram';
+import { createTikTokCardMapping } from '../utils/tiktok';
+import { createInstagramCardMapping } from '../utils/instagram';
+import { GiftCardsService } from '../utils/supabase/giftCards';
 
 interface GiftCardData {
+  recipientType: 'address' | 'twitter' | 'twitch' | 'telegram' | 'tiktok' | 'instagram';
   recipientAddress: string;
+  recipientUsername: string;
   amount: string;
   currency: 'USDC' | 'USDT';
   design: 'pink' | 'blue' | 'green' | 'custom';
@@ -34,11 +49,22 @@ interface GiftCardData {
   nftCover: string;
 }
 
+const SOCIAL_RECIPIENT_OPTIONS = [
+  { value: 'twitter', label: 'Twitter username' },
+  { value: 'twitch', label: 'Twitch username' },
+  { value: 'telegram', label: 'Telegram username' },
+  { value: 'tiktok', label: 'TikTok username' },
+  { value: 'instagram', label: 'Instagram username' }
+] as const;
+
 export function CreateGiftCard() {
   const { address, isConnected } = useAccount();
+  const { data: walletClient } = useWalletClient();
   const [formData, setFormData] = useState<GiftCardData>({
+    recipientType: 'address',
     recipientAddress: '',
-    amount: '0',
+    recipientUsername: '',
+    amount: '1',
     currency: 'USDC',
     design: 'pink',
     message: '',
@@ -47,7 +73,7 @@ export function CreateGiftCard() {
     timerHours: 24,
     hasPassword: false,
     password: '',
-    expiryDays: 7,
+    expiryDays: 365,
     customImage: '',
     nftCover: ''
   });
@@ -57,10 +83,194 @@ export function CreateGiftCard() {
   const [createdCard, setCreatedCard] = useState<any>(null);
   const [error, setError] = useState('');
   const [step, setStep] = useState<'form' | 'generating' | 'uploading' | 'creating' | 'success'>('form');
+  const [highlightField, setHighlightField] = useState<'twitch' | 'twitter' | 'telegram' | 'tiktok' | 'instagram' | null>(null);
+  const [isSocialsOpen, setIsSocialsOpen] = useState(formData.recipientType !== 'address');
+  const [resolvedRecipientAddress, setResolvedRecipientAddress] = useState<string | null>(null);
+  const [lastResolvedRecipientInput, setLastResolvedRecipientInput] = useState<string>('');
+  const [resolutionError, setResolutionError] = useState<string | null>(null);
+  const [isResolvingRecipient, setIsResolvingRecipient] = useState(false);
+
+  const formatAddress = (value: string) =>
+    value.length <= 10 ? value : `${value.slice(0, 6)}...${value.slice(-4)}`;
+
+  const resolveRecipientIdentifier = useCallback(async (rawValue: string) => {
+    const candidate = rawValue.trim();
+    if (!candidate) {
+      return null;
+    }
+
+    if (isAddress(candidate)) {
+      return candidate;
+    }
+
+    const normalizedName = candidate.toLowerCase();
+    const looksLikeBasename = isBasename(normalizedName);
+
+    const attempts: Array<() => Promise<string | null>> = looksLikeBasename
+      ? [
+          () => resolveOnchainName({ name: normalizedName, chain: baseChainViem }),
+          () => resolveOnchainName({ name: normalizedName, chain: mainnet })
+        ]
+      : [
+          () => resolveOnchainName({ name: candidate, chain: mainnet }),
+          () => resolveOnchainName({ name: candidate, chain: baseChainViem })
+        ];
+
+    for (const attempt of attempts) {
+      try {
+        const resolved = await attempt();
+        if (resolved) {
+          return resolved;
+        }
+      } catch (resolveError) {
+        console.warn('Failed to resolve recipient identifier', resolveError);
+      }
+    }
+
+    return null;
+  }, []);
+
+  // Load selected recipient from localStorage on mount
+  useEffect(() => {
+    const selectedRecipient = localStorage.getItem('selectedGiftCardRecipient');
+    if (selectedRecipient) {
+      try {
+        const recipient = JSON.parse(selectedRecipient);
+        if (recipient.type === 'twitch' && recipient.username) {
+          setFormData(prev => ({
+            ...prev,
+            recipientType: 'twitch',
+            recipientUsername: recipient.username
+          }));
+          // Highlight the field
+          setHighlightField('twitch');
+          toast.success(`Selected ${recipient.displayName || recipient.username} for gift card`);
+          // Clear the stored recipient after using it
+          localStorage.removeItem('selectedGiftCardRecipient');
+          // Remove highlight after animation
+          setTimeout(() => setHighlightField(null), 2000);
+        } else if (recipient.type === 'twitter' && recipient.username) {
+          setFormData(prev => ({
+            ...prev,
+            recipientType: 'twitter',
+            recipientUsername: recipient.username
+          }));
+          // Highlight the field
+          setHighlightField('twitter');
+          toast.success(`Selected ${recipient.displayName || recipient.username} for gift card`);
+          localStorage.removeItem('selectedGiftCardRecipient');
+          // Remove highlight after animation
+          setTimeout(() => setHighlightField(null), 2000);
+        } else if (recipient.type === 'telegram' && recipient.username) {
+          setFormData(prev => ({
+            ...prev,
+            recipientType: 'telegram',
+            recipientUsername: recipient.username.replace(/^@/, '')
+          }));
+          setHighlightField('telegram');
+          toast.success(`Selected ${recipient.displayName || recipient.username} for gift card`);
+          localStorage.removeItem('selectedGiftCardRecipient');
+          setTimeout(() => setHighlightField(null), 2000);
+        } else if (recipient.type === 'tiktok' && recipient.username) {
+          setFormData(prev => ({
+            ...prev,
+            recipientType: 'tiktok',
+            recipientUsername: recipient.username.replace(/^@/, '')
+          }));
+          setHighlightField('tiktok');
+          toast.success(`Selected ${recipient.displayName || recipient.username} for gift card`);
+          localStorage.removeItem('selectedGiftCardRecipient');
+          setTimeout(() => setHighlightField(null), 2000);
+        } else if (recipient.type === 'instagram' && recipient.username) {
+          setFormData(prev => ({
+            ...prev,
+            recipientType: 'instagram',
+            recipientUsername: recipient.username.replace(/^@/, '')
+          }));
+          setHighlightField('instagram');
+          toast.success(`Selected ${recipient.displayName || recipient.username} for gift card`);
+          localStorage.removeItem('selectedGiftCardRecipient');
+          setTimeout(() => setHighlightField(null), 2000);
+        } else if (recipient.type === 'address' && recipient.address) {
+          setFormData(prev => ({
+            ...prev,
+            recipientType: 'address',
+            recipientAddress: recipient.address
+          }));
+          toast.success(`Selected ${recipient.displayName || recipient.address.slice(0, 6) + '...' + recipient.address.slice(-4)} for gift card`);
+          localStorage.removeItem('selectedGiftCardRecipient');
+        }
+      } catch (error) {
+        console.error('Error parsing selected recipient:', error);
+        localStorage.removeItem('selectedGiftCardRecipient');
+      }
+    }
+  }, []);
 
   const updateFormData = (field: keyof GiftCardData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
+
+  useEffect(() => {
+    setIsSocialsOpen(formData.recipientType !== 'address');
+  }, [formData.recipientType]);
+
+  useEffect(() => {
+    if (formData.recipientType !== 'address') {
+      setResolvedRecipientAddress(null);
+      setLastResolvedRecipientInput('');
+      setResolutionError(null);
+      setIsResolvingRecipient(false);
+      return;
+    }
+
+    const input = formData.recipientAddress.trim();
+
+    if (!input) {
+      setResolvedRecipientAddress(null);
+      setLastResolvedRecipientInput('');
+      setResolutionError(null);
+      setIsResolvingRecipient(false);
+      return;
+    }
+
+    if (isAddress(input)) {
+      setResolvedRecipientAddress(input);
+      setLastResolvedRecipientInput(input);
+      setResolutionError(null);
+      setIsResolvingRecipient(false);
+      return;
+    }
+
+    if (!input.includes('.') || input.endsWith('.')) {
+      setResolvedRecipientAddress(null);
+      setLastResolvedRecipientInput('');
+      setResolutionError(null);
+      setIsResolvingRecipient(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsResolvingRecipient(true);
+    setResolutionError(null);
+
+    const timer = setTimeout(async () => {
+      const resolved = await resolveRecipientIdentifier(input);
+      if (cancelled) {
+        return;
+      }
+
+      setResolvedRecipientAddress(resolved);
+      setLastResolvedRecipientInput(input);
+      setResolutionError(resolved ? null : 'Unable to resolve recipient name');
+      setIsResolvingRecipient(false);
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [formData.recipientAddress, formData.recipientType, resolveRecipientIdentifier]);
 
   const handleCreateCard = async () => {
     if (!isConnected || !address) {
@@ -68,8 +278,77 @@ export function CreateGiftCard() {
       return;
     }
 
-    if (!formData.recipientAddress || !formData.amount || parseFloat(formData.amount) <= 0) {
-      setError('Please fill in all required fields');
+    const recipientIdentifierInput = formData.recipientAddress.trim();
+    let recipientAddressForTransaction = recipientIdentifierInput;
+
+    // Validate based on recipient type
+    if (formData.recipientType === 'address') {
+      if (!recipientIdentifierInput) {
+        setError('Please enter a recipient address or Basename');
+        return;
+      }
+
+      if (!isAddress(recipientIdentifierInput)) {
+        let resolved = null;
+
+        if (
+          resolvedRecipientAddress &&
+          lastResolvedRecipientInput === recipientIdentifierInput
+        ) {
+          resolved = resolvedRecipientAddress;
+        } else {
+          try {
+            setIsResolvingRecipient(true);
+            resolved = await resolveRecipientIdentifier(recipientIdentifierInput);
+          } finally {
+            setIsResolvingRecipient(false);
+          }
+        }
+
+        if (!resolved) {
+          setError('Unable to resolve recipient. Please enter a valid address or Basename.');
+          setResolutionError('Unable to resolve recipient name');
+          return;
+        }
+
+        recipientAddressForTransaction = resolved;
+        setResolvedRecipientAddress(resolved);
+        setLastResolvedRecipientInput(recipientIdentifierInput);
+        setResolutionError(null);
+      } else {
+        setResolvedRecipientAddress(recipientIdentifierInput);
+        setLastResolvedRecipientInput(recipientIdentifierInput);
+        setResolutionError(null);
+      }
+    } else if (formData.recipientType === 'twitter') {
+      if (!formData.recipientUsername || formData.recipientUsername.trim() === '') {
+        setError('Please enter a Twitter username');
+        return;
+      }
+    } else if (formData.recipientType === 'twitch') {
+      if (!formData.recipientUsername || formData.recipientUsername.trim() === '') {
+        setError('Please enter a Twitch username');
+        return;
+      }
+    } else if (formData.recipientType === 'telegram') {
+      if (!formData.recipientUsername || formData.recipientUsername.trim() === '') {
+        setError('Please enter a Telegram username');
+        return;
+      }
+    } else if (formData.recipientType === 'tiktok') {
+      if (!formData.recipientUsername || formData.recipientUsername.trim() === '') {
+        setError('Please enter a TikTok username');
+        return;
+      }
+    } else if (formData.recipientType === 'instagram') {
+      if (!formData.recipientUsername || formData.recipientUsername.trim() === '') {
+        setError('Please enter an Instagram username');
+        return;
+      }
+    }
+    
+    if (!formData.amount || parseFloat(formData.amount) <= 0) {
+      setError('Please enter a valid amount');
       return;
     }
 
@@ -102,30 +381,191 @@ export function CreateGiftCard() {
       );
 
       // Step 3: Initialize web3 service
-      const walletClient = createWalletClient({
-        chain: base,
-        transport: custom(window.ethereum)
-      });
+      // Try to use wagmi walletClient first, fallback to creating one manually
+      let clientToUse = walletClient;
+      if (!clientToUse) {
+        console.log('wagmi walletClient not available, creating manual client...');
+        clientToUse = createWalletClient({
+          chain: baseChain,
+          transport: custom(window.ethereum)
+        });
+      }
 
-      await web3Service.initialize(walletClient, address);
+      await web3Service.initialize(clientToUse, address);
 
       // Step 4: Create gift card on blockchain
       setStep('creating');
       toast.info('Creating gift card on blockchain...');
       
-      const result = await web3Service.createGiftCard(
-        formData.recipientAddress,
-        formData.amount,
-        formData.currency,
-        metadataUri,
-        formData.message
-      );
+      let result;
+      
+      // Use different methods based on recipient type
+      if (formData.recipientType === 'twitter') {
+        // Normalize username for consistency (createCardForTwitter also normalizes)
+        const normalizedUsername = formData.recipientUsername.toLowerCase().replace(/^@/, '').trim();
+        console.log('[CreateGiftCard] Creating Twitter card:', {
+          original: formData.recipientUsername,
+          normalized: normalizedUsername
+        });
+        
+        // Use new Vault flow for Twitter cards
+        result = await web3Service.createCardForTwitter(
+          normalizedUsername, // Using normalized username
+          formData.amount,
+          formData.currency,
+          metadataUri,
+          formData.message
+        );
+        
+        // Still save metadata to KV for additional info (using normalized username)
+        try {
+          await createTwitterCardMapping({
+            tokenId: result.tokenId,
+            username: normalizedUsername, // Saving normalized username
+            temporaryOwner: '', // No longer needed with Vault
+            senderAddress: address,
+            amount: formData.amount,
+            currency: formData.currency,
+            message: formData.message,
+            metadataUri: metadataUri
+          });
+        } catch (error) {
+          console.error('Error saving Twitter card metadata:', error);
+          // Non-critical error, card is already created on blockchain
+        }
+      } else if (formData.recipientType === 'twitch') {
+        const normalizedUsername = formData.recipientUsername.toLowerCase().trim();
+        console.log('[CreateGiftCard] Creating Twitch card:', {
+          original: formData.recipientUsername,
+          normalized: normalizedUsername
+        });
+        
+        result = await web3Service.createCardForTwitch(
+          normalizedUsername,
+          formData.amount,
+          formData.currency,
+          metadataUri,
+          formData.message
+        );
+        
+        try {
+          await createTwitchCardMapping({
+            tokenId: result.tokenId,
+            username: normalizedUsername,
+            temporaryOwner: '',
+            senderAddress: address,
+            amount: formData.amount,
+            currency: formData.currency,
+            message: formData.message,
+            metadataUri: metadataUri
+          });
+        } catch (error) {
+          console.error('Error saving Twitch card metadata:', error);
+        }
+      } else if (formData.recipientType === 'telegram') {
+        const normalizedUsername = formData.recipientUsername.toLowerCase().replace(/^@/, '').trim();
+        console.log('[CreateGiftCard] Creating Telegram card:', {
+          original: formData.recipientUsername,
+          normalized: normalizedUsername
+        });
+
+        result = await web3Service.createCardForTelegram(
+          normalizedUsername,
+          formData.amount,
+          formData.currency,
+          metadataUri,
+          formData.message
+        );
+
+        try {
+          await createTelegramCardMapping({
+            tokenId: result.tokenId,
+            username: normalizedUsername,
+            temporaryOwner: '',
+            senderAddress: address,
+            amount: formData.amount,
+            currency: formData.currency,
+            message: formData.message,
+            metadataUri: metadataUri
+          });
+        } catch (error) {
+          console.error('Error saving Telegram card metadata:', error);
+        }
+      } else if (formData.recipientType === 'tiktok') {
+        const normalizedUsername = formData.recipientUsername.toLowerCase().replace(/^@/, '').trim();
+        console.log('[CreateGiftCard] Creating TikTok card:', {
+          original: formData.recipientUsername,
+          normalized: normalizedUsername
+        });
+
+        result = await web3Service.createCardForTikTok(
+          normalizedUsername,
+          formData.amount,
+          formData.currency,
+          metadataUri,
+          formData.message
+        );
+
+        try {
+          await createTikTokCardMapping({
+            tokenId: result.tokenId,
+            username: normalizedUsername,
+            temporaryOwner: '',
+            senderAddress: address,
+            amount: formData.amount,
+            currency: formData.currency,
+            message: formData.message,
+            metadataUri: metadataUri
+          });
+        } catch (error) {
+          console.error('Error saving TikTok card metadata:', error);
+        }
+      } else if (formData.recipientType === 'instagram') {
+        const normalizedUsername = formData.recipientUsername.toLowerCase().replace(/^@/, '').trim();
+        console.log('[CreateGiftCard] Creating Instagram card:', {
+          original: formData.recipientUsername,
+          normalized: normalizedUsername
+        });
+
+        result = await web3Service.createCardForInstagram(
+          normalizedUsername,
+          formData.amount,
+          formData.currency,
+          metadataUri,
+          formData.message
+        );
+
+        try {
+          await createInstagramCardMapping({
+            tokenId: result.tokenId,
+            username: normalizedUsername,
+            temporaryOwner: '',
+            senderAddress: address,
+            amount: formData.amount,
+            currency: formData.currency,
+            message: formData.message,
+            metadataUri: metadataUri
+          });
+        } catch (error) {
+          console.error('Error saving Instagram card metadata:', error);
+        }
+      } else {
+        // Standard flow for address recipients
+        result = await web3Service.createGiftCard(
+          recipientAddressForTransaction,
+          formData.amount,
+          formData.currency,
+          metadataUri,
+          formData.message
+        );
+      }
 
       setStep('success');
       
       const createdCardData = {
         id: result.tokenId,
-        recipientAddress: formData.recipientAddress,
+        recipientAddress: recipientAddressForTransaction,
+        recipientIdentifier: recipientIdentifierInput || recipientAddressForTransaction,
         amount: formData.amount,
         currency: formData.currency,
         design: formData.design,
@@ -146,12 +586,38 @@ export function CreateGiftCard() {
       };
 
       setCreatedCard(createdCardData);
-      toast.success('Gift card created successfully!');
+      toast.success(`Gift card created successfully! Token ID: ${result.tokenId}`);
+      toast.success(`Gift card created successfully! TX: ${result.txHash.slice(0, 10)}...${result.txHash.slice(-8)}`);
+      
+      // Save to Supabase for caching
+      try {
+        const recipientUsernameForStorage =
+          formData.recipientType === 'address'
+            ? null
+            : formData.recipientUsername.replace(/^@/, '').trim();
+        await GiftCardsService.upsertCard({
+          token_id: result.tokenId,
+          sender_address: address.toLowerCase(),
+          recipient_address: formData.recipientType === 'address' ? recipientAddressForTransaction.toLowerCase() : null,
+          recipient_username: recipientUsernameForStorage,
+          recipient_type: formData.recipientType,
+          amount: formData.amount,
+          currency: formData.currency,
+          message: formData.message,
+          redeemed: false,
+          tx_hash: result.txHash,
+        });
+        console.log('Card saved to Supabase cache');
+      } catch (error) {
+        console.error('Error saving card to Supabase:', error);
+      }
       
       // Reset form
       setFormData({
+        recipientType: 'address',
         recipientAddress: '',
-        amount: '0',
+        recipientUsername: '',
+        amount: '1',
         currency: 'USDC',
         design: 'pink',
         message: '',
@@ -164,21 +630,49 @@ export function CreateGiftCard() {
         customImage: '',
         nftCover: ''
       });
+      setResolvedRecipientAddress(null);
+      setLastResolvedRecipientInput('');
+      setResolutionError(null);
     } catch (error) {
       console.error('Error creating gift card:', error);
-      setError(error instanceof Error ? error.message : 'Failed to create gift card');
-      toast.error('Failed to create gift card');
+      
+      // Check if it's a chain ID error with Coinbase Wallet
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create gift card';
+      if (errorMessage.includes('invalid chain ID') && typeof window !== 'undefined' && (window as any).ethereum?.isCoinbaseWallet) {
+        setError('Coinbase Wallet may not work properly with the Base network. Try MetaMask or Rainbow Wallet.');
+        toast.error('Error: use MetaMask or Rainbow Wallet', {
+          description: 'Coinbase Wallet may not work properly with the Base network'
+        });
+      } else {
+        setError(errorMessage);
+        toast.error('Failed to create gift card');
+      }
     } finally {
       setIsCreating(false);
       setStep('form');
     }
   };
 
-  const handleShare = () => {
-    if (createdCard) {
-      const shareUrl = `${window.location.origin}/redeem/${createdCard.id}`;
+  const handleShare = (method?: 'email' | 'x' | 'tiktok' | 'copy') => {
+    if (!createdCard) return;
+    
+    const shareUrl = `${window.location.origin}/redeem/${createdCard.id}`;
+    const shareText = `🎁 Receive a Sendly gift card for $${createdCard.amount} ${createdCard.currency}! ${shareUrl}`;
+    
+    if (method === 'email') {
+      const mailtoLink = `mailto:?subject=🎁 Sendly Gift Card&body=${encodeURIComponent(shareText)}`;
+      window.location.href = mailtoLink;
+      toast.success('Email app opened');
+    } else if (method === 'x') {
+      const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
+      window.open(twitterUrl, '_blank');
+      toast.success('Twitter opened for posting');
+    } else if (method === 'tiktok') {
       navigator.clipboard.writeText(shareUrl);
-      toast.success('Card link copied to clipboard!');
+      toast.success('Link copied! Paste it in TikTok');
+    } else {
+      navigator.clipboard.writeText(shareUrl);
+      toast.success('Link copied to clipboard!');
     }
   };
 
@@ -222,15 +716,187 @@ export function CreateGiftCard() {
         {/* Form Section */}
         <div className="space-y-4">
           <div>
-            <Label htmlFor="recipient">Recipient address (0x)</Label>
-            <Input
-              id="recipient"
-              placeholder="0x..."
-              value={formData.recipientAddress}
-              onChange={(e) => updateFormData('recipientAddress', e.target.value)}
-              className="mt-2"
-            />
+            <Label>Recipient type</Label>
+            <RadioGroup
+              value={formData.recipientType}
+              onValueChange={(value: 'address' | 'twitter' | 'twitch' | 'telegram' | 'tiktok' | 'instagram') => updateFormData('recipientType', value)}
+              className="mt-2 space-y-3"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="address" id="address" />
+                <Label htmlFor="address" className="cursor-pointer font-normal">
+                  Wallet address
+                </Label>
+              </div>
+              <Collapsible open={isSocialsOpen} onOpenChange={setIsSocialsOpen}>
+                <CollapsibleTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex w-full items-center justify-between bg-muted/20"
+                  >
+                    <span>Socials</span>
+                    <ChevronDown
+                      className={`h-4 w-4 transition-transform ${isSocialsOpen ? 'rotate-180' : ''}`}
+                    />
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-3 space-y-2 rounded-lg border border-dashed border-gray-200 p-3">
+                  {SOCIAL_RECIPIENT_OPTIONS.map((option) => (
+                    <div className="flex items-center space-x-2" key={option.value}>
+                      <RadioGroupItem value={option.value} id={option.value} />
+                      <Label htmlFor={option.value} className="cursor-pointer font-normal">
+                        {option.label}
+                      </Label>
+                    </div>
+                  ))}
+                </CollapsibleContent>
+              </Collapsible>
+            </RadioGroup>
           </div>
+
+          {formData.recipientType === 'address' ? (
+            <div>
+              <Label htmlFor="recipient">Recipient (wallet or Basename)</Label>
+              <Input
+                id="recipient"
+                placeholder="0x... or basename"
+                value={formData.recipientAddress}
+                onChange={(e) => updateFormData('recipientAddress', e.target.value)}
+                className="mt-2"
+              />
+              <p
+                className={`text-xs mt-1 ${
+                  resolutionError ? 'text-red-500' : 'text-gray-500'
+                }`}
+              >
+                {isResolvingRecipient
+                  ? 'Resolving recipient...'
+                  : resolvedRecipientAddress
+                  ? `Resolved to ${formatAddress(resolvedRecipientAddress)}`
+                  : resolutionError
+                  ? resolutionError
+                  : 'Enter a wallet address or Basename (e.g. xetra.base.eth)'}
+              </p>
+            </div>
+          ) : formData.recipientType === 'twitter' ? (
+            <div>
+              <Label htmlFor="username">Twitter username</Label>
+              <Input
+                id="username"
+                placeholder="username"
+                value={formData.recipientUsername}
+                onChange={(e) => {
+                  let username = e.target.value;
+                  if (username.startsWith('@')) {
+                    username = username.slice(1);
+                  }
+                  updateFormData('recipientUsername', username);
+                }}
+                className={`mt-2 transition-all duration-500 ${
+                  highlightField === 'twitter' 
+                    ? 'bg-blue-50 border-blue-400 ring-2 ring-blue-300 shadow-md' 
+                    : ''
+                }`}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                The recipient will need to login via Privy with Twitter to claim the card.
+              </p>
+            </div>
+          ) : formData.recipientType === 'twitch' ? (
+            <div>
+              <Label htmlFor="username">Twitch username</Label>
+              <Input
+                id="username"
+                placeholder="username"
+                value={formData.recipientUsername}
+                onChange={(e) => {
+                  const username = e.target.value.trim();
+                  updateFormData('recipientUsername', username);
+                }}
+                className={`mt-2 transition-all duration-500 ${
+                  highlightField === 'twitch' 
+                    ? 'bg-purple-50 border-purple-400 ring-2 ring-purple-300 shadow-md' 
+                    : ''
+                }`}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                The recipient will need to login via Privy with Twitch to claim the card.
+              </p>
+            </div>
+          ) : formData.recipientType === 'telegram' ? (
+            <div>
+              <Label htmlFor="username">Telegram username</Label>
+              <Input
+                id="username"
+                placeholder="nickname"
+                value={formData.recipientUsername}
+                onChange={(e) => {
+                  let username = e.target.value.trim();
+                  if (username.startsWith('@')) {
+                    username = username.slice(1);
+                  }
+                  updateFormData('recipientUsername', username);
+                }}
+                className={`mt-2 transition-all duration-500 ${
+                  highlightField === 'telegram'
+                    ? 'bg-sky-50 border-sky-400 ring-2 ring-sky-300 shadow-md'
+                    : ''
+                }`}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                The recipient will need to login via Privy with Telegram to claim the card.
+              </p>
+            </div>
+          ) : formData.recipientType === 'tiktok' ? (
+            <div>
+              <Label htmlFor="username">TikTok username</Label>
+              <Input
+                id="username"
+                placeholder="nickname"
+                value={formData.recipientUsername}
+                onChange={(e) => {
+                  let username = e.target.value.trim();
+                  if (username.startsWith('@')) {
+                    username = username.slice(1);
+                  }
+                  updateFormData('recipientUsername', username);
+                }}
+                className={`mt-2 transition-all duration-500 ${
+                  highlightField === 'tiktok'
+                    ? 'bg-neutral-900/10 border-black ring-2 ring-neutral-400 shadow-md'
+                    : ''
+                }`}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                The recipient will need to login via Privy with TikTok to claim the card.
+              </p>
+            </div>
+          ) : (
+            <div>
+              <Label htmlFor="username">Instagram username</Label>
+              <Input
+                id="username"
+                placeholder="nickname"
+                value={formData.recipientUsername}
+                onChange={(e) => {
+                  let username = e.target.value.trim();
+                  if (username.startsWith('@')) {
+                    username = username.slice(1);
+                  }
+                  updateFormData('recipientUsername', username);
+                }}
+                className={`mt-2 transition-all duration-500 ${
+                  highlightField === 'instagram'
+                    ? 'bg-pink-50 border-pink-400 ring-2 ring-pink-300 shadow-md'
+                    : ''
+                }`}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                The recipient will need to login via Privy with Instagram to claim the card.
+              </p>
+            </div>
+          )}
 
           <div>
             <Label htmlFor="amount">Amount (in $)</Label>
@@ -280,124 +946,6 @@ export function CreateGiftCard() {
               </Select>
             </div>
           </div>
-
-          <div>
-            <Label htmlFor="message">Message (for example: Happy Birthday!)</Label>
-            <Textarea
-              id="message"
-              placeholder="Happy Birthday!"
-              value={formData.message}
-              onChange={(e) => updateFormData('message', e.target.value)}
-              className="mt-2"
-            />
-          </div>
-
-          {/* Advanced Features Toggle */}
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="advanced"
-              checked={showAdvanced}
-              onCheckedChange={setShowAdvanced}
-            />
-            <Label htmlFor="advanced">Advanced features</Label>
-          </div>
-
-          {showAdvanced && (
-            <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
-              {/* Secret Message */}
-              <div>
-                <Label htmlFor="secret">Secret message (revealed after activation)</Label>
-                <Textarea
-                  id="secret"
-                  placeholder="A special message or promo code..."
-                  value={formData.secretMessage}
-                  onChange={(e) => updateFormData('secretMessage', e.target.value)}
-                />
-              </div>
-
-              {/* Timer Feature */}
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="timer"
-                  checked={formData.hasTimer}
-                  onCheckedChange={(checked) => updateFormData('hasTimer', checked)}
-                />
-                <Label htmlFor="timer">Open later (timer)</Label>
-              </div>
-
-              {formData.hasTimer && (
-                <div>
-                  <Label>Hours until card can be opened: {formData.timerHours}h</Label>
-                  <Slider
-                    value={[formData.timerHours]}
-                    onValueChange={(value) => updateFormData('timerHours', value[0])}
-                    max={168}
-                    min={1}
-                    step={1}
-                    className="mt-2"
-                  />
-                </div>
-              )}
-
-              {/* Password Protection */}
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="password"
-                  checked={formData.hasPassword}
-                  onCheckedChange={(checked) => updateFormData('hasPassword', checked)}
-                />
-                <Label htmlFor="password">Password protection</Label>
-              </div>
-
-              {formData.hasPassword && (
-                <Input
-                  placeholder="Enter password"
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => updateFormData('password', e.target.value)}
-                />
-              )}
-
-              {/* Expiry */}
-              <div>
-                <Label>Card expires in: {formData.expiryDays} days</Label>
-                <Slider
-                  value={[formData.expiryDays]}
-                  onValueChange={(value) => updateFormData('expiryDays', value[0])}
-                  max={365}
-                  min={1}
-                  step={1}
-                  className="mt-2"
-                />
-              </div>
-
-              {/* Custom Design Upload */}
-              <div>
-                <Label>Custom design</Label>
-                <div className="flex gap-2 mt-2">
-                  <Button variant="outline" size="sm">
-                    <Upload className="w-4 h-4 mr-2" />
-                    Upload Image
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <Palette className="w-4 h-4 mr-2" />
-                    AI Generate
-                  </Button>
-                </div>
-              </div>
-
-              {/* NFT Cover */}
-              <div>
-                <Label htmlFor="nft">NFT Cover (optional)</Label>
-                <Input
-                  id="nft"
-                  placeholder="NFT contract address or OpenSea URL"
-                  value={formData.nftCover}
-                  onChange={(e) => updateFormData('nftCover', e.target.value)}
-                />
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Preview Section */}
@@ -451,11 +999,14 @@ export function CreateGiftCard() {
 
           {/* Action Buttons */}
           <div className="space-y-2">
-            <Button 
-              className="w-full" 
-              size="lg" 
+            <Button
+              className="w-full border border-strong"
+              size="lg"
               onClick={handleCreateCard}
-              disabled={isCreating}
+              disabled={
+                isCreating ||
+                (formData.recipientType === 'address' && isResolvingRecipient)
+              }
             >
               {isCreating ? getStepText() : 'Create a card'}
             </Button>
@@ -470,25 +1021,46 @@ export function CreateGiftCard() {
                 <QrCode className="w-4 h-4 mr-2" />
                 Generate QR
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="flex-1"
-                onClick={handleShare}
-                disabled={!createdCard}
-              >
-                <Share2 className="w-4 h-4 mr-2" />
-                Share
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="flex-1"
+                    disabled={!createdCard}
+                  >
+                    <Share2 className="w-4 h-4 mr-2" />
+                    Share
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleShare('email')}>
+                    <Mail className="w-4 h-4 mr-2" />
+                    Send via Email
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleShare('x')}>
+                    <MessageCircle className="w-4 h-4 mr-2" />
+                    Share on X (Twitter)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleShare('tiktok')}>
+                    <Share2 className="w-4 h-4 mr-2" />
+                    Share on TikTok
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleShare('copy')}>
+                    <Copy className="w-4 h-4 mr-2" />
+                    Copy link
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             
-            <div className="flex flex-col items-start space-y-1">
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
+            {/* <div className="flex flex-col items-start space-y-1"> 
+             {/* <div className="flex items-center space-x-2 text-sm text-gray-600">
                 <input type="checkbox" id="paymaster" disabled className="opacity-50 cursor-not-allowed" />
                 <Label htmlFor="paymaster" className="opacity-50 cursor-not-allowed">Use paymaster</Label>
               </div>
               <span className="text-gray-500 text-xs ml-5">Coming soon</span>
-            </div>
+            </div> */}
           </div>
 
           {/* Error Display */}
@@ -508,9 +1080,12 @@ export function CreateGiftCard() {
                 <div className="text-sm">
                   TX: 
                   <button
-                    onClick={() => window.open(`https://basescan.org/tx/${createdCard.tx_hash}`, '_blank')}
+                    onClick={() => {
+                      const explorer = import.meta.env.VITE_BASE_BLOCK_EXPLORER_URL || 'https://basescan.org';
+                      window.open(`${explorer}/tx/${createdCard.tx_hash}`, '_blank');
+                    }}
                     className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors ml-1"
-                    title={`View on Basescan: ${createdCard.tx_hash}`}
+                    title={`View on BaseScan: ${createdCard.tx_hash}`}
                   >
                     {createdCard.tx_hash.slice(0, 10)}...{createdCard.tx_hash.slice(-8)}
                   </button>
@@ -519,7 +1094,137 @@ export function CreateGiftCard() {
             </Alert>
           )}
         </div>
+
+        {/* Message field - spans both columns */}
+        <div className="lg:col-span-2">
+          <Label htmlFor="message">Message</Label>
+          <Textarea
+            id="message"
+            placeholder="Your message here..."
+            value={formData.message}
+            onChange={(e) => updateFormData('message', e.target.value)}
+            className="mt-2 w-full"
+          />
+        </div>
+
+        {/* Advanced Features Toggle */}
+        <div className="lg:col-span-2 flex items-center space-x-2 -mt-4">
+          <Checkbox
+            id="advanced"
+            checked={showAdvanced}
+            onCheckedChange={(checked) => {
+              if (typeof checked === 'boolean') {
+                setShowAdvanced(checked);
+              }
+            }}
+          />
+          <Label htmlFor="advanced" className="cursor-pointer">Advanced features</Label>
+        </div>
       </div>
+
+      {/* Advanced Features - Full width, below grid */}
+      {showAdvanced && (
+        <div className="space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+          {/* Secret Message */}
+          <div>
+            <Label htmlFor="secret" className="text-base font-medium">Secret message (revealed after activation)</Label>
+            <Textarea
+              id="secret"
+              placeholder="A special message or promo code..."
+              value={formData.secretMessage}
+              onChange={(e) => updateFormData('secretMessage', e.target.value)}
+              className="mt-2"
+              rows={4}
+            />
+          </div>
+
+          {/* Timer Feature */}
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="timer"
+              checked={formData.hasTimer}
+              onCheckedChange={(checked) => updateFormData('hasTimer', checked)}
+            />
+            <Label htmlFor="timer" className="text-base font-medium cursor-pointer">Open later (timer)</Label>
+          </div>
+
+          {formData.hasTimer && (
+            <div className="pl-6 space-y-1">
+              <Label className="text-base">Hours until card can be opened: {formData.timerHours}h</Label>
+              <Slider
+                value={[formData.timerHours]}
+                onValueChange={(value) => updateFormData('timerHours', value[0])}
+                max={168}
+                min={1}
+                step={1}
+                className="mt-2 w-full"
+              />
+            </div>
+          )}
+
+          {/* Password Protection */}
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="password"
+              checked={formData.hasPassword}
+              onCheckedChange={(checked) => updateFormData('hasPassword', checked)}
+            />
+            <Label htmlFor="password" className="text-base font-medium cursor-pointer">Password protection</Label>
+          </div>
+
+          {formData.hasPassword && (
+            <div className="pl-6">
+              <Input
+                placeholder="Enter password"
+                type="password"
+                value={formData.password}
+                onChange={(e) => updateFormData('password', e.target.value)}
+                className="mt-2 w-full"
+              />
+            </div>
+          )}
+
+          {/* Expiry */}
+          <div className="space-y-2">
+            <Label className="text-base font-medium">Card expires in: {formData.expiryDays} days</Label>
+            <Slider
+              value={[formData.expiryDays]}
+              onValueChange={(value) => updateFormData('expiryDays', value[0])}
+              max={365}
+              min={1}
+              step={1}
+              className="mt-2 w-full"
+            />
+          </div>
+
+          {/* Custom Design Upload */}
+          <div className="space-y-2">
+            <Label className="text-base font-medium">Custom design</Label>
+            <div className="flex gap-2">
+              <Button variant="outline" size="default" className="flex-1">
+                <Upload className="w-4 h-4 mr-2" />
+                Upload Image
+              </Button>
+              <Button variant="outline" size="default" className="flex-1">
+                <Palette className="w-4 h-4 mr-2" />
+                AI Generate
+              </Button>
+            </div>
+          </div>
+
+          {/* NFT Cover */}
+          <div className="space-y-1">
+            <Label htmlFor="nft" className="text-base font-medium">NFT Cover (optional)</Label>
+            <Input
+              id="nft"
+              placeholder="NFT contract address or OpenSea URL"
+              value={formData.nftCover}
+              onChange={(e) => updateFormData('nftCover', e.target.value)}
+              className="mt-2 w-full"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -5,10 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Input } from './ui/input';
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from './ui/empty';
+import { Spinner } from './ui/spinner';
+import { Skeleton } from './ui/skeleton';
 import { toast } from 'sonner';
 import { useAccount } from 'wagmi';
 import { createWalletClient, custom } from 'viem';
-import { base } from 'viem/chains';
+import { baseChain } from '../utils/web3/wagmiConfig';
 import web3Service from '../utils/web3/web3Service';
 
 interface Transaction {
@@ -129,15 +132,16 @@ export function TransactionHistory() {
       
       // Initialize web3 service
       const walletClient = createWalletClient({
-        chain: base,
+        chain: baseChain,
         transport: custom(window.ethereum)
       });
 
       await web3Service.initialize(walletClient, address);
       
       // Load received gift cards first (usually faster)
+      // Using API to get fresh data without cache
       console.log('Loading received gift cards...');
-      const receivedCards = await web3Service.loadGiftCards();
+      const receivedCards = await web3Service.loadGiftCards(false);
       
       // Load sent gift cards (can be slower due to logs)
       console.log('Loading sent gift cards...');
@@ -290,7 +294,8 @@ export function TransactionHistory() {
   };
 
   const handleTxHashClick = (txHash: string) => {
-    window.open(`https://basescan.org/tx/${txHash}`, '_blank');
+    const explorer = (import.meta as any).env?.VITE_BASE_BLOCK_EXPLORER_URL || 'https://basescan.org';
+    window.open(`${explorer}/tx/${txHash}`, '_blank');
   };
 
   const filteredTransactions = transactions.filter(tx => {
@@ -350,27 +355,36 @@ export function TransactionHistory() {
 
   if (!isConnected) {
     return (
-      <div className="p-6 text-center">
-        <div className="text-gray-500">
-          <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
-          <p>Please connect your wallet to view transaction history</p>
-        </div>
+      <div className="p-6">
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Calendar className="w-12 h-12 opacity-50" />
+            </EmptyMedia>
+            <EmptyTitle>Connect your wallet</EmptyTitle>
+            <EmptyDescription>
+              Please connect your wallet to view transaction history
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       </div>
     );
   }
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-gray-600">Loading transaction history...</p>
-          <p className="text-gray-500 text-sm">This may take some time on first connection</p>
-          <div className="animate-pulse space-y-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
-            ))}
+      <div className="p-6 space-y-4">
+        <div className="text-center space-y-2">
+          <div className="flex items-center justify-center gap-2">
+            <Spinner className="w-6 h-6" />
+            <p className="text-gray-600">Loading transaction history...</p>
           </div>
+          <p className="text-gray-500 text-sm">This may take some time on first connection</p>
+        </div>
+        <div className="space-y-4">
+          {[...Array(3)].map((_, i) => (
+            <Skeleton key={i} className="h-32 w-full" />
+          ))}
         </div>
       </div>
     );
@@ -397,7 +411,7 @@ export function TransactionHistory() {
             variant="outline"
             disabled={loading}
           >
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            {loading ? <Spinner className="w-4 h-4 mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
             Refresh
           </Button>
           <Button onClick={handleExport} variant="outline">
@@ -561,7 +575,7 @@ export function TransactionHistory() {
                   <button
                     onClick={() => handleTxHashClick(tx.txHash)}
                     className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors"
-                    title={`View on Basescan: ${tx.txHash}`}
+                    title={`View on BaseScan: ${tx.txHash}`}
                   >
                     {tx.txHash.slice(0, 10)}...{tx.txHash.slice(-8)}
                   </button>

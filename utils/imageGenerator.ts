@@ -1,11 +1,5 @@
 // Image Generator for Gift Cards
-export interface GiftCardImageData {
-  amount: string;
-  currency: string;
-  message: string;
-  design: 'pink' | 'blue' | 'green' | 'custom';
-  customImage?: string;
-}
+import type { GiftCardImageData } from '../src/types/giftCard';
 
 export class ImageGenerator {
   private canvas: HTMLCanvasElement;
