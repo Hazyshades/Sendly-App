@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --palette-base-blue: 240 100% 50%;
+  --palette-base-blue: 221 100% 51%; 
   --palette-cerulean: 216 100% 61.8%;
   --palette-gray-0: 0 0% 100%;
   --palette-gray-10: 216 17.2% 94.3%;
