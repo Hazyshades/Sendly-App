@@ -614,14 +614,14 @@ export function MyCards({ onSpendCard }: MyCardsProps) {
       
       <Tabs defaultValue="received" className="w-full">
         <TabsList className={`grid w-full ${authenticated ? 'grid-cols-3' : 'grid-cols-2'}`}>
-          <TabsTrigger value="sent" className="border border-strong">
+          <TabsTrigger value="sent" className="border border-strong data-[state=active]:border-primary data-[state=active]:ring-2 data-[state=active]:ring-primary/20">
             Sent ({sentCards.length})
           </TabsTrigger>
-          <TabsTrigger value="received" className="border border-strong">
+          <TabsTrigger value="received" className="border border-strong data-[state=active]:border-primary data-[state=active]:ring-2 data-[state=active]:ring-primary/20">
             Received ({receivedCards.length})
           </TabsTrigger>
           {authenticated && (
-            <TabsTrigger value="pending" className="border border-strong">
+            <TabsTrigger value="pending" className="border border-strong data-[state=active]:border-primary data-[state=active]:ring-2 data-[state=active]:ring-primary/20">
               Pending Claims ({pendingCount})
             </TabsTrigger>
           )}
