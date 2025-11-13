@@ -50,8 +50,6 @@ The agent is based on the orchestration of **Langraph** and **Telegram bot**. Yo
 - Check your balance
 - Plan expenses through the planner
 
-![Voice Agent](https://github.com/user-attachments/assets/6b824984-1012-4f19-84fe-2bc4544cffea)
-
 ---
 
 ## Getting Started
