@@ -6,7 +6,7 @@ import { Label } from './ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Alert, AlertDescription } from './ui/alert';
 import { AlertCircle, Mail, Lock, User } from 'lucide-react';
-import { supabase } from '../utils/supabase/client';
+import { getSupabaseClient } from '../utils/supabase/client';
 import { toast } from 'sonner';
 
 interface AuthModalProps {
@@ -26,6 +26,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setError('');
 
     try {
+      const supabase = getSupabaseClient();
       const { error } = await supabase.auth.signInWithPassword({
         email: signInData.email,
         password: signInData.password,
@@ -51,6 +52,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
     try {
       // Use standard Supabase sign up
+      const supabase = getSupabaseClient();
       const { data, error } = await supabase.auth.signUp({
         email: signUpData.email,
         password: signUpData.password,
@@ -85,6 +87,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setError('');
 
     try {
+      const supabase = getSupabaseClient();
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {

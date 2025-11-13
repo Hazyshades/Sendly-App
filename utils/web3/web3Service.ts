@@ -19,8 +19,6 @@ import {
   BASE_RPC_URLS
 } from './constants';
 
-// Basescan API base URL
-const BASESCAN_API_URL = 'https://api.basescan.org/api';
 const TARGET_CHAIN_NAME = baseChain.name || 'Base';
 
 import type { GiftCardInfo, BlockchainGiftCardInfo } from '../../src/types/web3';
@@ -1311,7 +1309,6 @@ export class Web3Service {
         return '0';
       }
       
-      // Используем стандартный ERC20 balanceOf (6 знаков после запятой)
       const balance = await this.safeRequest(async () => {
         return await this.publicClient.readContract({
           address: tokenAddress as `0x${string}`,

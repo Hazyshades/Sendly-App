@@ -1,11 +1,11 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Card } from './ui/card';
 
 interface DeveloperWalletProps {
   blockchain?: string;
   onWalletCreated?: () => void;
 }
 
-export function DeveloperWalletComponent({ blockchain }: DeveloperWalletProps) {
+export function DeveloperWalletComponent({ }: DeveloperWalletProps) {
   return (
     <Card className="bg-white/90 backdrop-blur-sm border border-gray-200 shadow-circle-card">
      {/* <CardHeader>
